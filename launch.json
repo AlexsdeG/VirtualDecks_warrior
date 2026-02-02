@@ -1,0 +1,40 @@
+{
+    "configurations": [
+      {
+        "type": "cppvsdbg",
+        "request": "launch",
+        "name": "Launch Program",
+        "program": "${workspaceFolder}/build/bin/Debug/JUCE Loop Station.exe",
+        "args": [],
+        "cwd": "${workspaceFolder}",
+        "stopAtEntry": false,
+        "preLaunchTask": "build"
+      },
+      {
+        "name": "Debug via lldb",
+        "request": "launch",
+        "type": "lldb",
+        "program": "${command:cmake.launchTargetPath}",
+        "args": [],
+        "cwd": "${workspaceFolder}"
+      },
+      {
+          "name": "Launch Program (Linux)",
+          "type": "cppdbg",
+          "request": "launch",
+          "program": "${workspaceFolder}/build/bin/JUCE Loop Station",
+          "args": [],
+          "cwd": "${workspaceFolder}",
+          "stopAtEntry": false,
+          "preLaunchTask": "build",
+          "MIMode": "gdb",
+          "setupCommands": [
+              {
+                  "description": "Enable pretty-printing for gdb",
+                  "text": "-enable-pretty-printing",
+                  "ignoreFailures": true
+              }
+          ]
+      }
+    ]
+  }

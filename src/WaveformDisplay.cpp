@@ -132,7 +132,7 @@ void WaveformDisplay::paint(juce::Graphics& g)
 		}
 
 		for (auto i = 0; i < cueTargets.size(); ++i) {
-			g.setColour(juce::Colour::fromHSL(cueTargets[i]->second, 1, 0.5, 1));
+			g.setColour(juce::Colour::fromHSL(static_cast<float>(cueTargets[i]->second), 1.0f, 0.5f, 1.0f));
 			g.drawRect(cueTargets[i]->first * getWidth(), 0, 1, getHeight());
 		}
 	}

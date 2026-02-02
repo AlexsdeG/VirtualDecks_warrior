@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=JUCE Loop Station
+Comment=Audio loop station made with JUCE
+Exec=/usr/local/bin/JUCELoopStation
+Icon=juce-loopstation
+Terminal=false
+Categories=AudioVideo;Audio;

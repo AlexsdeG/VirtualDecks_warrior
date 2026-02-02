@@ -1,0 +1,12 @@
+[submodule "lib/JUCE"]
+	path = lib/JUCE
+	url = https://github.com/juce-framework/JUCE.git
+	branch = master
+[submodule "lib/taglib"]
+	path = lib/taglib
+	url = https://github.com/taglib/taglib.git
+	branch = master
+[submodule "lib/xwax"]
+	path = lib/xwax
+	url = https://github.com/xwax/xwax.git
+	branch = master

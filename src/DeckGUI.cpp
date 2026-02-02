@@ -255,7 +255,10 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		}
 	}
 
-	modeIsPlaying ? player->start() : player->stop();
+	if (modeIsPlaying)
+		player->start();
+	else
+		player->stop();
 };
 
 //============================================================================== 
@@ -363,7 +366,8 @@ void DeckGUI::timerCallback() {
 						player->stop();
 					}
 					else {
-						!player->isPlaying() ? player->start() : NULL;
+						if (!player->isPlaying())
+							player->start();
 					}
 				}
 				player->setPositionRelative(pos);
@@ -371,7 +375,10 @@ void DeckGUI::timerCallback() {
 			}
 			else if (canContinue == false && !(displays[i]->isSliderDragged()) && draggedIndex == i) {
 				DBG("YESSSS " << (displays[i]->isSliderDragged() ? "true" : "false"));
-				modeIsPlaying ? player->start() : player->stop();
+				if (modeIsPlaying)
+					player->start();
+				else
+					player->stop();
 				canContinue = true;
 				draggedIndex = -1;
 			}

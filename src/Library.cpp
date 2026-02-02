@@ -33,7 +33,7 @@ Library::Library(juce::AudioFormatManager& _formatManager) : formatManager(_form
 				folder.first = newValueTree.getChild(i).getProperty("name");
 				for (auto j = 0; j < newValueTree.getChild(i).getNumChildren(); ++j) {
 					auto song = newValueTree.getChild(i).getChild(j);
-					track refSong{ song.getProperty("title"), song.getProperty("length") , song.getProperty("url") , song.getProperty("identity") };
+					track refSong{ song.getProperty("title"), song.getProperty("length") , juce::URL(song.getProperty("url").toString()), song.getProperty("identity") };
 					folder.second.push_back(refSong);
 				}
 				trackFolders.push_back(folder);
