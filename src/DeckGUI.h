@@ -172,8 +172,15 @@ private:
 	/// juce::Label to label the BPM slider
 	juce::Label speedLabel{ "SPEED", "SPEED" };
 
-	/// juce::Slider to adjust the resampled speed(BPM) of the audio source.
-	juce::Slider speedSlider{ juce::Slider::SliderStyle::LinearVertical , juce::Slider::TextEntryBoxPosition::NoTextBox };
+	/// Slider subclass that ignores right-click mouse events so right-click only opens the context menu.
+	struct SpeedSlider : public juce::Slider {
+		SpeedSlider() : juce::Slider(juce::Slider::SliderStyle::LinearVertical, juce::Slider::TextEntryBoxPosition::NoTextBox) {}
+		void mouseDown(const juce::MouseEvent& e) override { if (!e.mods.isPopupMenu()) juce::Slider::mouseDown(e); }
+		void mouseDrag(const juce::MouseEvent& e) override { if (!e.mods.isPopupMenu()) juce::Slider::mouseDrag(e); }
+	};
+
+	/// SpeedSlider to adjust the resampled speed(BPM) of the audio source.
+	SpeedSlider speedSlider;
 
 	/// juce::Label to display the current BPM value
 	juce::Label bpmValueLabel{ "BPM_VAL", "---" };

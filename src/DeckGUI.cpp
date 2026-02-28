@@ -67,6 +67,7 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 	loadButton.addListener(this);
 	volSlider.addListener(this);
 	speedSlider.addListener(this);
+	speedSlider.addMouseListener(this, false);
 
 	filter.addListener(this);
 	lowBandFilter.addListener(this);
@@ -462,10 +463,26 @@ void DeckGUI::buttonClicked(juce::Button* button) {
  * Handles right-click context menu on cue buttons for set/jump/remove actions.
  */
 void DeckGUI::mouseDown(const juce::MouseEvent& event) {
-	if (!event.mods.isPopupMenu() || !player->isLoaded())
+	if (!event.mods.isPopupMenu())
 		return;
 
 	auto* source = event.eventComponent;
+
+	if (source == &speedSlider) {
+		juce::PopupMenu menu;
+		menu.addItem(1, "Reset to 0%");
+		menu.showMenuAsync(juce::PopupMenu::Options(),
+			[this](int result) {
+				if (result == 1) {
+					speedSlider.setValue(1.0, juce::sendNotification);
+				}
+			});
+		return;
+	}
+
+	if (!player->isLoaded())
+		return;
+
 	for (auto& cue : cues) {
 		if (source == cue) {
 			bool hasCue = cueTargets.find(cue) != cueTargets.end();
