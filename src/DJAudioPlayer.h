@@ -186,6 +186,57 @@ public:
 	 */
 	void beatJump(int beats);
 
+	//==============================================================================
+
+	/**
+	 * Set the loop-in point at the current playback position.
+	 */
+	void setLoopIn();
+
+	/**
+	 * Set the loop-out point at the current playback position and activate looping.
+	 */
+	void setLoopOut();
+
+	/**
+	 * Toggle loop on/off. If loop points are set, re-enable or disable looping.
+	 */
+	void toggleReloop();
+
+	/**
+	 * Halve the loop length by moving the loop-out point closer to loop-in.
+	 */
+	void halveLoop();
+
+	/**
+	 * Double the loop length by moving the loop-out point further from loop-in.
+	 */
+	void doubleLoop();
+
+	/**
+	 * Clear all loop points and deactivate looping.
+	 */
+	void clearLoop();
+
+	/**
+	 * @return True if a loop is currently active.
+	 */
+	bool isLooping() const;
+
+	/**
+	 * Get the loop-in position as a relative value (0 to 1).
+	 * Returns -1.0 if not set.
+	 */
+	double getLoopInRelative() const;
+
+	/**
+	 * Get the loop-out position as a relative value (0 to 1).
+	 * Returns -1.0 if not set.
+	 */
+	double getLoopOutRelative() const;
+
+	//==============================================================================
+
 	/**
 	 * Get the current beat grid for the loaded track.
 	 */
@@ -258,4 +309,13 @@ private:
 
 	/// Beat grid for the loaded track
 	BeatGrid beatGrid;
+
+	/// Loop-in position in seconds (-1.0 = not set)
+	double loopInSecs = -1.0;
+
+	/// Loop-out position in seconds (-1.0 = not set)
+	double loopOutSecs = -1.0;
+
+	/// Whether the loop is currently active
+	bool loopActive = false;
 };

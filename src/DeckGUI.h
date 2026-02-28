@@ -254,8 +254,8 @@ private:
 	//==============================================================================
 	// Tab mode: Hot Cues vs Beat Grid
 
-	/// Enum for the cue/grid/jump tab mode
-	enum class CueGridMode { HotCues, BeatGrid, BeatJump };
+	/// Enum for the cue/grid/jump/loop tab mode
+	enum class CueGridMode { HotCues, BeatGrid, BeatJump, Loop };
 
 	/// Current tab mode
 	CueGridMode cueGridMode = CueGridMode::HotCues;
@@ -268,6 +268,9 @@ private:
 
 	/// Tab button for beat jump controls
 	juce::TextButton jumpTabButton{ "JUMP" };
+
+	/// Tab button for loop controls
+	juce::TextButton loopTabButton{ "LOOP" };
 
 	//==============================================================================
 	// Beat Grid Controls
@@ -314,6 +317,30 @@ private:
 
 	/// Sets visibility of beat jump controls
 	void setBeatJumpControlsVisible(bool visible);
+
+	//==============================================================================
+	// Loop Controls
+
+	/// Loop IN button
+	juce::TextButton loopInBtn{ "IN" };
+
+	/// Loop OUT button
+	juce::TextButton loopOutBtn{ "OUT" };
+
+	/// Reloop (toggle) button
+	juce::TextButton reloopBtn{ "RELOOP" };
+
+	/// Halve loop length button
+	juce::TextButton loopHalveBtn{ juce::CharPointer_UTF8("\xc3\x97\xc2\xbd") };
+
+	/// Double loop length button
+	juce::TextButton loopDoubleBtn{ juce::CharPointer_UTF8("\xc3\x97\x32") };
+
+	/// Clear loop button
+	juce::TextButton loopClearBtn{ "CLR" };
+
+	/// Sets visibility of loop controls
+	void setLoopControlsVisible(bool visible);
 
 	/// Identity hash of the currently loaded track (legacy)
 	juce::String currentTrackIdentity;

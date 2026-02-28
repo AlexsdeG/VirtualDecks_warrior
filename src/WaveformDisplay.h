@@ -85,6 +85,15 @@ public:
 	 */
 	void setBeatGrid(double bpm, double offsetSecs, double speed);
 
+	/**
+	 * Set the loop region for visualization.
+	 *
+	 * @param inRelative Loop-in position (0 to 1), or -1 if not set
+	 * @param outRelative Loop-out position (0 to 1), or -1 if not set
+	 * @param active True if the loop is currently active
+	 */
+	void setLoopRegion(double inRelative, double outRelative, bool active);
+
 	//============================================================================== 
 
 private:
@@ -203,4 +212,13 @@ protected:
 
 	/// Current playback speed ratio
 	double speedRatio = 1.0;
+
+	/// Loop-in relative position (-1 if not set)
+	double loopInRel = -1.0;
+
+	/// Loop-out relative position (-1 if not set)
+	double loopOutRel = -1.0;
+
+	/// Whether loop is currently active
+	bool loopIsActive = false;
 };

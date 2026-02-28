@@ -87,16 +87,19 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 		cue->setLookAndFeel(&customLookAndFeel);
 	}
 
-	// Tab buttons for cue/grid/jump switching
+	// Tab buttons for cue/grid/jump/loop switching
 	addAndMakeVisible(cueTabButton);
 	addAndMakeVisible(gridTabButton);
 	addAndMakeVisible(jumpTabButton);
+	addAndMakeVisible(loopTabButton);
 	cueTabButton.addListener(this);
 	gridTabButton.addListener(this);
 	jumpTabButton.addListener(this);
+	loopTabButton.addListener(this);
 	cueTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 	gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 	jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 
 	// Beat grid controls
 	gridBpmLabel.setEditable(false);
@@ -159,6 +162,17 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 	jumpLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
 	jumpLabel.setFont(juce::Font(juce::FontOptions(10.0f)));
 	addChildComponent(jumpLabel);
+
+	// Loop controls
+	std::vector<juce::TextButton*> loopBtns{
+		&loopInBtn, &loopOutBtn, &reloopBtn, &loopHalveBtn, &loopDoubleBtn, &loopClearBtn
+	};
+	for (auto* btn : loopBtns) {
+		btn->addListener(this);
+		btn->setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		btn->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+		addChildComponent(*btn);
+	}
 
 	const std::unique_ptr<juce::XmlElement> playButton_xml(juce::XmlDocument::parse(BinaryData::playButton_svg));
 	const std::unique_ptr<juce::XmlElement> playButtonHover_xml(juce::XmlDocument::parse(BinaryData::playButtonHover_svg));
@@ -303,12 +317,14 @@ void DeckGUI::resized()
 	double cellLength = (getWidth() * 18.5 / 32 - 105) / 3;
 	double cellHeight = 44.45;
 
-	// Tab buttons above cue/grid/jump area
-	double tabWidth = cellLength;
+	// Tab buttons above cue/grid/jump/loop area
+	double tabAreaWidth = cellLength * 3;
+	double tabWidth = (tabAreaWidth - 6) / 4; // 4 tabs with 2px gaps
 	double tabHeight = 20;
 	cueTabButton.setBounds(xOffset, yOffset - tabHeight - 2, tabWidth, tabHeight);
-	gridTabButton.setBounds(xOffset + tabWidth + 2, yOffset - tabHeight - 2, tabWidth, tabHeight);
+	gridTabButton.setBounds(xOffset + (tabWidth + 2), yOffset - tabHeight - 2, tabWidth, tabHeight);
 	jumpTabButton.setBounds(xOffset + (tabWidth + 2) * 2, yOffset - tabHeight - 2, tabWidth, tabHeight);
+	loopTabButton.setBounds(xOffset + (tabWidth + 2) * 3, yOffset - tabHeight - 2, tabWidth, tabHeight);
 
 	// Cue buttons (same as before)
 	for (auto i = 0; i < 3; ++i) {
@@ -350,6 +366,17 @@ void DeckGUI::resized()
 	jumpForward8Btn.setBounds(xOffset + (jumpBtnWidth + 4) * 2, jumpRow2Y, jumpBtnWidth, cellHeight - 4);
 	jumpForward16Btn.setBounds(xOffset + (jumpBtnWidth + 4) * 3, jumpRow2Y, jumpBtnWidth, cellHeight - 4);
 
+	// Loop controls layout (same area as cue buttons)
+	double loopRow1Y = yOffset + 4;
+	double loopRow2Y = yOffset + cellHeight + 4;
+	double loopBtnWidth = (cellLength * 3 - 4) / 3 - 3;
+	loopInBtn.setBounds(xOffset, loopRow1Y, loopBtnWidth, cellHeight - 4);
+	loopOutBtn.setBounds(xOffset + (loopBtnWidth + 4), loopRow1Y, loopBtnWidth, cellHeight - 4);
+	reloopBtn.setBounds(xOffset + (loopBtnWidth + 4) * 2, loopRow1Y, loopBtnWidth, cellHeight - 4);
+	loopHalveBtn.setBounds(xOffset, loopRow2Y, loopBtnWidth, cellHeight - 4);
+	loopDoubleBtn.setBounds(xOffset + (loopBtnWidth + 4), loopRow2Y, loopBtnWidth, cellHeight - 4);
+	loopClearBtn.setBounds(xOffset + (loopBtnWidth + 4) * 2, loopRow2Y, loopBtnWidth, cellHeight - 4);
+
 	lowBandFilter.setBounds(xOffset, rowH * 5.8, 50, 50);
 	midBandFilter.setBounds(xOffset + getWidth() / 5, rowH * 5.8, 50, 50);
 	highBandFilter.setBounds(xOffset + getWidth() * 2 / 5, rowH * 5.8, 50, 50);
@@ -386,9 +413,11 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		cueTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(true);
 		setGridControlsVisible(false);
 		setBeatJumpControlsVisible(false);
+		setLoopControlsVisible(false);
 	}
 
 	if (button == &gridTabButton) {
@@ -396,9 +425,11 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		gridTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(false);
 		setGridControlsVisible(true);
 		setBeatJumpControlsVisible(false);
+		setLoopControlsVisible(false);
 		updateGridBpmDisplay();
 	}
 
@@ -407,9 +438,23 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		jumpTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(false);
 		setGridControlsVisible(false);
 		setBeatJumpControlsVisible(true);
+		setLoopControlsVisible(false);
+	}
+
+	if (button == &loopTabButton) {
+		cueGridMode = CueGridMode::Loop;
+		loopTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
+		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		setCueButtonsVisible(false);
+		setGridControlsVisible(false);
+		setBeatJumpControlsVisible(false);
+		setLoopControlsVisible(true);
 	}
 
 	// Beat jump buttons
@@ -421,6 +466,14 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 	if (button == &jumpForward4Btn) player->beatJump(4);
 	if (button == &jumpForward8Btn) player->beatJump(8);
 	if (button == &jumpForward16Btn) player->beatJump(16);
+
+	// Loop buttons
+	if (button == &loopInBtn) player->setLoopIn();
+	if (button == &loopOutBtn) player->setLoopOut();
+	if (button == &reloopBtn) player->toggleReloop();
+	if (button == &loopHalveBtn) player->halveLoop();
+	if (button == &loopDoubleBtn) player->doubleLoop();
+	if (button == &loopClearBtn) player->clearLoop();
 
 	// Grid control buttons
 	if (button == &gridNudgeLeftBtn) {
@@ -732,7 +785,16 @@ void DeckGUI::timerCallback() {
 	const BeatGrid& grid = player->getBeatGrid();
 	for (auto* display : displays) {
 		display->setBeatGrid(grid.bpm, grid.gridOffsetSecs, speedRatio);
+		display->setLoopRegion(player->getLoopInRelative(), player->getLoopOutRelative(), player->isLooping());
 	}
+
+	// Update loop button highlights
+	bool inSet = player->getLoopInRelative() >= 0.0;
+	bool loopOn = player->isLooping();
+	loopInBtn.setColour(juce::TextButton::buttonColourId,
+		inSet ? juce::Colours::orange.withAlpha(0.7f) : juce::Colour::fromRGBA(25, 25, 25, 255));
+	reloopBtn.setColour(juce::TextButton::buttonColourId,
+		loopOn ? juce::Colours::limegreen.withAlpha(0.6f) : juce::Colour::fromRGBA(25, 25, 25, 255));
 }
 
 //============================================================================== 
@@ -855,6 +917,22 @@ void DeckGUI::setBeatJumpControlsVisible(bool visible) {
 	jumpForward8Btn.setVisible(visible);
 	jumpForward16Btn.setVisible(visible);
 	jumpLabel.setVisible(visible);
+}
+
+//==============================================================================
+
+/**
+ * Implementation of setLoopControlsVisible method for DeckGUI
+ *
+ * Shows or hides all loop control components.
+ */
+void DeckGUI::setLoopControlsVisible(bool visible) {
+	loopInBtn.setVisible(visible);
+	loopOutBtn.setVisible(visible);
+	reloopBtn.setVisible(visible);
+	loopHalveBtn.setVisible(visible);
+	loopDoubleBtn.setVisible(visible);
+	loopClearBtn.setVisible(visible);
 }
 
 //==============================================================================

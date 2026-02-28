@@ -50,6 +50,13 @@ void DJAudioPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate
  */
 void DJAudioPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) {
 	audioLPFilter.getNextAudioBlock(bufferToFill);
+
+	// Loop: if active and playhead has passed the out point, jump back to in point
+	if (loopActive && loopInSecs >= 0.0 && loopOutSecs > loopInSecs) {
+		if (transportSource.getCurrentPosition() >= loopOutSecs)
+			transportSource.setPosition(loopInSecs);
+	}
+
 	float rmsLevelLeft = juce::Decibels::gainToDecibels(bufferToFill.buffer->getRMSLevel(0, 0, bufferToFill.buffer->getNumSamples()));
 	float rmsLevelRight = juce::Decibels::gainToDecibels(bufferToFill.buffer->getRMSLevel(1, 0, bufferToFill.buffer->getNumSamples()));
 	level = (rmsLevelLeft + rmsLevelRight) / 2;
@@ -138,6 +145,11 @@ void DJAudioPlayer::loadURL(juce::URL audioURL) {
 		// Reset BPM state — BPM is now set externally from cache/analysis
 		detectedBpm = 0.0;
 		beatGrid = BeatGrid();
+
+		// Clear loop state on new track load
+		loopInSecs = -1.0;
+		loopOutSecs = -1.0;
+		loopActive = false;
 	}
 	else
 	{
@@ -371,6 +383,122 @@ void DJAudioPlayer::beatJump(int beats) {
 
 	transportSource.setPosition(newPos);
 }
+
+//==============================================================================
+
+/**
+ * Implementation of setLoopIn method for DJAudioPlayer
+ *
+ * Stores the current playback position as the loop-in point.
+ */
+void DJAudioPlayer::setLoopIn() {
+	if (!loaded)
+		return;
+	loopInSecs = transportSource.getCurrentPosition();
+	// If out point is already set and in >= out, clear out point
+	if (loopOutSecs >= 0.0 && loopInSecs >= loopOutSecs) {
+		loopOutSecs = -1.0;
+		loopActive = false;
+	}
+}
+
+/**
+ * Implementation of setLoopOut method for DJAudioPlayer
+ *
+ * Stores the current playback position as the loop-out point
+ * and activates looping if the in point is already set.
+ */
+void DJAudioPlayer::setLoopOut() {
+	if (!loaded)
+		return;
+	double pos = transportSource.getCurrentPosition();
+	if (loopInSecs >= 0.0 && pos > loopInSecs) {
+		loopOutSecs = pos;
+		loopActive = true;
+	}
+}
+
+/**
+ * Implementation of toggleReloop method for DJAudioPlayer
+ *
+ * Toggles loop on/off. When re-enabling, jumps back to the loop-in point.
+ */
+void DJAudioPlayer::toggleReloop() {
+	if (loopInSecs < 0.0 || loopOutSecs < 0.0)
+		return;
+	loopActive = !loopActive;
+	if (loopActive)
+		transportSource.setPosition(loopInSecs);
+}
+
+/**
+ * Implementation of halveLoop method for DJAudioPlayer
+ *
+ * Halves the loop length by moving the out point halfway between in and current out.
+ */
+void DJAudioPlayer::halveLoop() {
+	if (loopInSecs < 0.0 || loopOutSecs <= loopInSecs)
+		return;
+	double halfLength = (loopOutSecs - loopInSecs) / 2.0;
+	loopOutSecs = loopInSecs + halfLength;
+	// If playhead is now past the out point, jump back to in
+	if (loopActive && transportSource.getCurrentPosition() >= loopOutSecs)
+		transportSource.setPosition(loopInSecs);
+}
+
+/**
+ * Implementation of doubleLoop method for DJAudioPlayer
+ *
+ * Doubles the loop length by extending the out point, clamped to track length.
+ */
+void DJAudioPlayer::doubleLoop() {
+	if (loopInSecs < 0.0 || loopOutSecs <= loopInSecs)
+		return;
+	double currentLength = loopOutSecs - loopInSecs;
+	double newOut = loopInSecs + currentLength * 2.0;
+	double trackLen = transportSource.getLengthInSeconds();
+	if (newOut > trackLen)
+		newOut = trackLen;
+	loopOutSecs = newOut;
+}
+
+/**
+ * Implementation of clearLoop method for DJAudioPlayer
+ *
+ * Clears all loop points and deactivates looping.
+ */
+void DJAudioPlayer::clearLoop() {
+	loopInSecs = -1.0;
+	loopOutSecs = -1.0;
+	loopActive = false;
+}
+
+/**
+ * Implementation of isLooping method for DJAudioPlayer
+ */
+bool DJAudioPlayer::isLooping() const {
+	return loopActive;
+}
+
+/**
+ * Implementation of getLoopInRelative method for DJAudioPlayer
+ */
+double DJAudioPlayer::getLoopInRelative() const {
+	if (loopInSecs < 0.0 || transportSource.getLengthInSeconds() <= 0.0)
+		return -1.0;
+	return loopInSecs / transportSource.getLengthInSeconds();
+}
+
+/**
+ * Implementation of getLoopOutRelative method for DJAudioPlayer
+ */
+double DJAudioPlayer::getLoopOutRelative() const {
+	if (loopOutSecs < 0.0 || transportSource.getLengthInSeconds() <= 0.0)
+		return -1.0;
+	return loopOutSecs / transportSource.getLengthInSeconds();
+}
+
+//==============================================================================
 
 /**
  * Implementation of setBeatGrid method for DJAudioPlayer

@@ -116,6 +116,20 @@ void WaveformDisplay::setBeatGrid(double bpm, double offsetSecs, double speed) {
 	}
 };
 
+/**
+ * Implementation of setLoopRegion method for WaveformDisplay
+ *
+ * Updates the loop region parameters used for rendering the loop highlight.
+ */
+void WaveformDisplay::setLoopRegion(double inRelative, double outRelative, bool active) {
+	if (loopInRel != inRelative || loopOutRel != outRelative || loopIsActive != active) {
+		loopInRel = inRelative;
+		loopOutRel = outRelative;
+		loopIsActive = active;
+		repaint();
+	}
+};
+
 //==============================================================================
 
 /**
@@ -148,6 +162,28 @@ void WaveformDisplay::paint(juce::Graphics& g)
 		for (auto i = 0; i < cueTargets.size(); ++i) {
 			g.setColour(juce::Colour::fromHSL(static_cast<float>(cueTargets[i]->second), 1.0f, 0.5f, 1.0f));
 			g.drawRect(cueTargets[i]->first * getWidth(), 0, 1, getHeight());
+		}
+
+		// Draw loop region highlight
+		if (loopInRel >= 0.0) {
+			float loopX1 = static_cast<float>(loopInRel * getWidth());
+			// Always draw the IN marker as an orange line
+			g.setColour(juce::Colours::orange);
+			g.drawLine(loopX1, 0.0f, loopX1, static_cast<float>(getHeight()), 2.0f);
+
+			if (loopOutRel > loopInRel) {
+				float loopX2 = static_cast<float>(loopOutRel * getWidth());
+				juce::Colour loopColour = loopIsActive
+					? juce::Colours::limegreen.withAlpha(0.25f)
+					: juce::Colours::orange.withAlpha(0.20f);
+				g.setColour(loopColour);
+				g.fillRect(loopX1, 0.0f, loopX2 - loopX1, static_cast<float>(getHeight()));
+				// Draw boundary lines
+				juce::Colour lineColour = loopIsActive ? juce::Colours::limegreen : juce::Colours::orange;
+				g.setColour(lineColour);
+				g.drawLine(loopX1, 0.0f, loopX1, static_cast<float>(getHeight()), 2.0f);
+				g.drawLine(loopX2, 0.0f, loopX2, static_cast<float>(getHeight()), 2.0f);
+			}
 		}
 	}
 	else {
