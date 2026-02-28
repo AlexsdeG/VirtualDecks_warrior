@@ -179,6 +179,14 @@ public:
 	double getSpeedRatio() const;
 
 	/**
+	 * Jump forward or backward by a given number of beats.
+	 * Uses the current beat grid BPM to calculate the distance.
+	 *
+	 * @param beats Number of beats to jump (negative = backward)
+	 */
+	void beatJump(int beats);
+
+	/**
 	 * Get the current beat grid for the loaded track.
 	 */
 	const BeatGrid& getBeatGrid() const;

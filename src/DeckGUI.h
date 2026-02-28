@@ -254,8 +254,8 @@ private:
 	//==============================================================================
 	// Tab mode: Hot Cues vs Beat Grid
 
-	/// Enum for the cue/grid tab mode
-	enum class CueGridMode { HotCues, BeatGrid };
+	/// Enum for the cue/grid/jump tab mode
+	enum class CueGridMode { HotCues, BeatGrid, BeatJump };
 
 	/// Current tab mode
 	CueGridMode cueGridMode = CueGridMode::HotCues;
@@ -265,6 +265,9 @@ private:
 
 	/// Tab button for beat grid controls
 	juce::TextButton gridTabButton{ "GRID" };
+
+	/// Tab button for beat jump controls
+	juce::TextButton jumpTabButton{ "JUMP" };
 
 	//==============================================================================
 	// Beat Grid Controls
@@ -292,6 +295,25 @@ private:
 
 	/// Timestamps of tap tempo presses
 	std::vector<double> tapTimes;
+
+	//==============================================================================
+	// Beat Jump Controls
+
+	/// Beat jump buttons: -16, -8, -4, -1, +1, +4, +8, +16
+	juce::TextButton jumpBackward16Btn{ "-16" };
+	juce::TextButton jumpBackward8Btn{ "-8" };
+	juce::TextButton jumpBackward4Btn{ "-4" };
+	juce::TextButton jumpBackward1Btn{ "-1" };
+	juce::TextButton jumpForward1Btn{ "+1" };
+	juce::TextButton jumpForward4Btn{ "+4" };
+	juce::TextButton jumpForward8Btn{ "+8" };
+	juce::TextButton jumpForward16Btn{ "+16" };
+
+	/// Label for beat jump section
+	juce::Label jumpLabel{ "BEAT JUMP", "BEAT JUMP" };
+
+	/// Sets visibility of beat jump controls
+	void setBeatJumpControlsVisible(bool visible);
 
 	/// Identity hash of the currently loaded track (legacy)
 	juce::String currentTrackIdentity;

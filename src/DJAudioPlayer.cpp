@@ -349,6 +349,30 @@ const BeatGrid& DJAudioPlayer::getBeatGrid() const {
 }
 
 /**
+ * Implementation of beatJump method for DJAudioPlayer
+ *
+ * Jumps the playhead forward or backward by a given number of beats.
+ * Requires a valid BPM in the beat grid to calculate beat duration.
+ */
+void DJAudioPlayer::beatJump(int beats) {
+	if (!loaded || beatGrid.bpm <= 0.0)
+		return;
+
+	double secondsPerBeat = 60.0 / beatGrid.bpm;
+	double jumpSecs = beats * secondsPerBeat;
+	double currentPos = transportSource.getCurrentPosition();
+	double newPos = currentPos + jumpSecs;
+
+	// Clamp to valid range
+	if (newPos < 0.0)
+		newPos = 0.0;
+	else if (newPos > transportSource.getLengthInSeconds())
+		newPos = transportSource.getLengthInSeconds();
+
+	transportSource.setPosition(newPos);
+}
+
+/**
  * Implementation of setBeatGrid method for DJAudioPlayer
  *
  * Updates the beat grid for the loaded track.

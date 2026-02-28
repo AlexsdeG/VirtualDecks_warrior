@@ -87,13 +87,16 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 		cue->setLookAndFeel(&customLookAndFeel);
 	}
 
-	// Tab buttons for cue/grid switching
+	// Tab buttons for cue/grid/jump switching
 	addAndMakeVisible(cueTabButton);
 	addAndMakeVisible(gridTabButton);
+	addAndMakeVisible(jumpTabButton);
 	cueTabButton.addListener(this);
 	gridTabButton.addListener(this);
+	jumpTabButton.addListener(this);
 	cueTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 	gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 
 	// Beat grid controls
 	gridBpmLabel.setEditable(false);
@@ -138,6 +141,24 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 	gridOffsetLabel.setJustificationType(juce::Justification::centred);
 	gridOffsetLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
 	gridOffsetLabel.setFont(juce::Font(juce::FontOptions(10.0f)));
+
+	// Beat jump controls
+	std::vector<juce::TextButton*> jumpBtns{
+		&jumpBackward16Btn, &jumpBackward8Btn, &jumpBackward4Btn, &jumpBackward1Btn,
+		&jumpForward1Btn, &jumpForward4Btn, &jumpForward8Btn, &jumpForward16Btn
+	};
+	for (auto* btn : jumpBtns) {
+		btn->addListener(this);
+		btn->setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		btn->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+		addChildComponent(*btn);
+	}
+
+	jumpLabel.setEditable(false);
+	jumpLabel.setJustificationType(juce::Justification::centred);
+	jumpLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+	jumpLabel.setFont(juce::Font(juce::FontOptions(10.0f)));
+	addChildComponent(jumpLabel);
 
 	const std::unique_ptr<juce::XmlElement> playButton_xml(juce::XmlDocument::parse(BinaryData::playButton_svg));
 	const std::unique_ptr<juce::XmlElement> playButtonHover_xml(juce::XmlDocument::parse(BinaryData::playButtonHover_svg));
@@ -282,11 +303,12 @@ void DeckGUI::resized()
 	double cellLength = (getWidth() * 18.5 / 32 - 105) / 3;
 	double cellHeight = 44.45;
 
-	// Tab buttons above cue/grid area
-	double tabWidth = cellLength * 1.5;
+	// Tab buttons above cue/grid/jump area
+	double tabWidth = cellLength;
 	double tabHeight = 20;
 	cueTabButton.setBounds(xOffset, yOffset - tabHeight - 2, tabWidth, tabHeight);
 	gridTabButton.setBounds(xOffset + tabWidth + 2, yOffset - tabHeight - 2, tabWidth, tabHeight);
+	jumpTabButton.setBounds(xOffset + (tabWidth + 2) * 2, yOffset - tabHeight - 2, tabWidth, tabHeight);
 
 	// Cue buttons (same as before)
 	for (auto i = 0; i < 3; ++i) {
@@ -311,6 +333,22 @@ void DeckGUI::resized()
 	tapTempoBtn.setBounds(xOffset + cellLength * 2, gridRow1Y, ctrlWidth, cellHeight - 4);
 
 	gridResetBtn.setBounds(xOffset, gridRow2Y, ctrlWidth, cellHeight - 4);
+
+	// Beat jump controls layout (same area as cue buttons)
+	double jumpAreaWidth = cellLength * 3 - 4;
+	double jumpBtnWidth = jumpAreaWidth / 4 - 3;
+	double jumpRow1Y = yOffset + 4;
+	double jumpRow2Y = yOffset + cellHeight + 4;
+
+	jumpLabel.setBounds(xOffset, jumpRow1Y - 14, jumpAreaWidth, 14);
+	jumpBackward16Btn.setBounds(xOffset, jumpRow1Y, jumpBtnWidth, cellHeight - 4);
+	jumpBackward8Btn.setBounds(xOffset + (jumpBtnWidth + 4), jumpRow1Y, jumpBtnWidth, cellHeight - 4);
+	jumpBackward4Btn.setBounds(xOffset + (jumpBtnWidth + 4) * 2, jumpRow1Y, jumpBtnWidth, cellHeight - 4);
+	jumpBackward1Btn.setBounds(xOffset + (jumpBtnWidth + 4) * 3, jumpRow1Y, jumpBtnWidth, cellHeight - 4);
+	jumpForward1Btn.setBounds(xOffset, jumpRow2Y, jumpBtnWidth, cellHeight - 4);
+	jumpForward4Btn.setBounds(xOffset + (jumpBtnWidth + 4), jumpRow2Y, jumpBtnWidth, cellHeight - 4);
+	jumpForward8Btn.setBounds(xOffset + (jumpBtnWidth + 4) * 2, jumpRow2Y, jumpBtnWidth, cellHeight - 4);
+	jumpForward16Btn.setBounds(xOffset + (jumpBtnWidth + 4) * 3, jumpRow2Y, jumpBtnWidth, cellHeight - 4);
 
 	lowBandFilter.setBounds(xOffset, rowH * 5.8, 50, 50);
 	midBandFilter.setBounds(xOffset + getWidth() / 5, rowH * 5.8, 50, 50);
@@ -347,18 +385,42 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		cueGridMode = CueGridMode::HotCues;
 		cueTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(true);
 		setGridControlsVisible(false);
+		setBeatJumpControlsVisible(false);
 	}
 
 	if (button == &gridTabButton) {
 		cueGridMode = CueGridMode::BeatGrid;
 		gridTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
 		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(false);
 		setGridControlsVisible(true);
+		setBeatJumpControlsVisible(false);
 		updateGridBpmDisplay();
 	}
+
+	if (button == &jumpTabButton) {
+		cueGridMode = CueGridMode::BeatJump;
+		jumpTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
+		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		setCueButtonsVisible(false);
+		setGridControlsVisible(false);
+		setBeatJumpControlsVisible(true);
+	}
+
+	// Beat jump buttons
+	if (button == &jumpBackward16Btn) player->beatJump(-16);
+	if (button == &jumpBackward8Btn) player->beatJump(-8);
+	if (button == &jumpBackward4Btn) player->beatJump(-4);
+	if (button == &jumpBackward1Btn) player->beatJump(-1);
+	if (button == &jumpForward1Btn) player->beatJump(1);
+	if (button == &jumpForward4Btn) player->beatJump(4);
+	if (button == &jumpForward8Btn) player->beatJump(8);
+	if (button == &jumpForward16Btn) player->beatJump(16);
 
 	// Grid control buttons
 	if (button == &gridNudgeLeftBtn) {
@@ -774,6 +836,25 @@ void DeckGUI::updateGridBpmDisplay() {
 		gridBpmEditor.setText(juce::String(bpm, 1), false);
 	else
 		gridBpmEditor.setText("", false);
+}
+
+//==============================================================================
+
+/**
+ * Implementation of setBeatJumpControlsVisible method for DeckGUI
+ *
+ * Shows or hides all beat jump control components.
+ */
+void DeckGUI::setBeatJumpControlsVisible(bool visible) {
+	jumpBackward16Btn.setVisible(visible);
+	jumpBackward8Btn.setVisible(visible);
+	jumpBackward4Btn.setVisible(visible);
+	jumpBackward1Btn.setVisible(visible);
+	jumpForward1Btn.setVisible(visible);
+	jumpForward4Btn.setVisible(visible);
+	jumpForward8Btn.setVisible(visible);
+	jumpForward16Btn.setVisible(visible);
+	jumpLabel.setVisible(visible);
 }
 
 //==============================================================================
