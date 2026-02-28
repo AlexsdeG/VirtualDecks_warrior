@@ -1,5 +1,5 @@
 ---
-mode: "ask"
+mode: "agent"
 description: "Add a new audio effect to the DJ player"
 ---
 

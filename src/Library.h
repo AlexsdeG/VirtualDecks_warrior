@@ -18,7 +18,8 @@
  */
 class Library : public juce::Component,
                 public juce::TableListBoxModel,
-                public juce::FileDragAndDropTarget {
+                public juce::FileDragAndDropTarget,
+                public juce::Button::Listener {
 public:
   //==============================================================================
 
@@ -52,6 +53,38 @@ public:
    * selected pair's vector
    */
   void deleteItem();
+
+  //==============================================================================
+
+  /**
+   * Adds audio files to the currently selected folder via file chooser dialog
+   */
+  void addFilesToFolder();
+
+  /**
+   * Adds a new empty folder to the library
+   */
+  void addFolder();
+
+  /**
+   * Removes the currently selected folder from the library
+   */
+  void removeFolder();
+
+  /**
+   * Renames the currently selected folder
+   */
+  void renameFolder();
+
+  /**
+   * Removes the currently selected track from the current folder
+   */
+  void removeSelectedTrack();
+
+  /**
+   * Opens a directory chooser to import a folder of audio files into the library
+   */
+  void importFolderFromDisk();
 
   //==============================================================================
 
@@ -132,6 +165,15 @@ private:
 
   //==============================================================================
 
+  /**
+   * Called when a button is clicked
+   *
+   * @param Button that was clicked
+   */
+  void buttonClicked(juce::Button *button) override;
+
+  //==============================================================================
+
   /// Instance of CustomLookAndFeel class.
   CustomLookAndFeel customLookAndFeel;
 
@@ -156,6 +198,27 @@ private:
   /// File path to read xml data from and load the trackFolders when the
   /// application starts
   juce::String filePath;
+
+  /// Button to add a new folder
+  juce::TextButton addFolderBtn{"+ Folder"};
+
+  /// Button to remove the selected folder
+  juce::TextButton removeFolderBtn{"- Folder"};
+
+  /// Button to rename the selected folder
+  juce::TextButton renameFolderBtn{"Rename"};
+
+  /// Button to add files to the selected folder
+  juce::TextButton addFilesBtn{"+ Files"};
+
+  /// Button to remove the selected track
+  juce::TextButton removeTrackBtn{"- Track"};
+
+  /// Button to import a folder of audio files from disk
+  juce::TextButton importFolderBtn{"Import Folder"};
+
+  /// File chooser for adding audio files
+  std::unique_ptr<juce::FileChooser> fileChooser;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Library)
 };

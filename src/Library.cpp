@@ -66,6 +66,30 @@ Library::Library(juce::AudioFormatManager &_formatManager)
   directoryComponent.setColour(juce::ListBox::ColourIds::backgroundColourId,
                                juce::Colour::fromRGBA(25, 25, 25, 255));
   directoryComponent.selectRow(selectedFolderIndex);
+
+  // Setup folder management buttons
+  addAndMakeVisible(addFolderBtn);
+  addAndMakeVisible(removeFolderBtn);
+  addAndMakeVisible(renameFolderBtn);
+  addAndMakeVisible(addFilesBtn);
+  addAndMakeVisible(removeTrackBtn);
+
+  auto buttonColour = juce::Colour::fromRGBA(50, 50, 50, 255);
+  addFolderBtn.setColour(juce::TextButton::buttonColourId, buttonColour);
+  removeFolderBtn.setColour(juce::TextButton::buttonColourId, buttonColour);
+  renameFolderBtn.setColour(juce::TextButton::buttonColourId, buttonColour);
+  addFilesBtn.setColour(juce::TextButton::buttonColourId, buttonColour);
+  removeTrackBtn.setColour(juce::TextButton::buttonColourId, buttonColour);
+
+  addAndMakeVisible(importFolderBtn);
+  importFolderBtn.setColour(juce::TextButton::buttonColourId, buttonColour);
+
+  addFolderBtn.addListener(this);
+  removeFolderBtn.addListener(this);
+  renameFolderBtn.addListener(this);
+  addFilesBtn.addListener(this);
+  removeTrackBtn.addListener(this);
+  importFolderBtn.addListener(this);
 }
 
 /**
@@ -182,11 +206,29 @@ void Library::paint(juce::Graphics &g) {}
  * directoryComponent.
  */
 void Library::resized() {
+  auto buttonBarHeight = 28;
+  auto dirWidth = 1.5 * getWidth() / 8;
+  auto playlistX = dirWidth;
+  auto playlistWidth = getWidth() - dirWidth;
+  auto contentHeight = getHeight() - buttonBarHeight;
+
+  directoryComponent.setBounds(0, 0, dirWidth, contentHeight);
+
   if (selectedFolderIndex != -1) {
-    playlist.setBounds(1.5 * getWidth() / 8, 0, 6.5 * getWidth() / 8,
-                       getHeight());
+    playlist.setBounds(playlistX, 0, playlistWidth, contentHeight);
   }
-  directoryComponent.setBounds(0, 0, 1.5 * getWidth() / 8, getHeight());
+
+  // Folder buttons below the directory list
+  auto folderBtnWidth = dirWidth / 4;
+  addFolderBtn.setBounds(0, contentHeight, folderBtnWidth, buttonBarHeight);
+  removeFolderBtn.setBounds(folderBtnWidth, contentHeight, folderBtnWidth, buttonBarHeight);
+  renameFolderBtn.setBounds(2 * folderBtnWidth, contentHeight, folderBtnWidth, buttonBarHeight);
+  importFolderBtn.setBounds(3 * folderBtnWidth, contentHeight, dirWidth - 3 * folderBtnWidth, buttonBarHeight);
+
+  // Track buttons below the playlist
+  auto trackBtnWidth = playlistWidth / 2;
+  addFilesBtn.setBounds(playlistX, contentHeight, trackBtnWidth, buttonBarHeight);
+  removeTrackBtn.setBounds(playlistX + trackBtnWidth, contentHeight, playlistWidth - trackBtnWidth, buttonBarHeight);
 }
 
 //==============================================================================
@@ -241,6 +283,27 @@ void Library::cellClicked(int rowNumber, int columnId,
   DBG(" PlaylistComponent::cellClicked " << rowNumber);
   selectedFolderIndex = rowNumber;
   playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+
+  if (e.mods.isPopupMenu()) {
+    juce::PopupMenu menu;
+    menu.addItem(1, "Add Folder");
+    menu.addItem(2, "Rename Folder");
+    menu.addItem(3, "Remove Folder", trackFolders.size() > 1);
+    menu.addSeparator();
+    menu.addItem(4, "Add Files to Folder");
+
+    menu.showMenuAsync(juce::PopupMenu::Options(),
+      [this](int result) {
+        if (result == 1)
+          addFolder();
+        else if (result == 2)
+          renameFolder();
+        else if (result == 3)
+          removeFolder();
+        else if (result == 4)
+          addFilesToFolder();
+      });
+  }
 };
 
 //==============================================================================
@@ -343,5 +406,251 @@ void Library::filesDropped(const juce::StringArray &files, int x, int y) {
   directoryComponent.updateContent();
   directoryComponent.selectRow(selectedFolderIndex, true);
 };
+
+//==============================================================================
+
+/**
+ * Implementation of buttonClicked method for Library
+ *
+ * Routes button clicks to the appropriate action method.
+ */
+void Library::buttonClicked(juce::Button *button) {
+  if (button == &addFolderBtn)
+    addFolder();
+  else if (button == &removeFolderBtn)
+    removeFolder();
+  else if (button == &renameFolderBtn)
+    renameFolder();
+  else if (button == &addFilesBtn)
+    addFilesToFolder();
+  else if (button == &removeTrackBtn)
+    removeSelectedTrack();
+  else if (button == &importFolderBtn)
+    importFolderFromDisk();
+}
+
+//==============================================================================
+
+/**
+ * Implementation of addFolder method for Library
+ *
+ * Prompts user for a folder name and creates a new empty folder.
+ */
+void Library::addFolder() {
+  auto *editor = new juce::AlertWindow("New Folder", "Enter folder name:",
+                                       juce::MessageBoxIconType::NoIcon);
+  editor->addTextEditor("name", "New Folder", "Folder Name:");
+  editor->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+  editor->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+  editor->enterModalState(true, juce::ModalCallbackFunction::create(
+    [this, editor](int result) {
+      if (result == 1) {
+        auto name = editor->getTextEditorContents("name").trim();
+        if (name.isNotEmpty()) {
+          std::pair<juce::String, std::vector<track>> folder;
+          folder.first = name;
+          trackFolders.push_back(folder);
+          selectedFolderIndex = static_cast<int>(trackFolders.size()) - 1;
+          directoryComponent.updateContent();
+          directoryComponent.selectRow(selectedFolderIndex);
+          playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+        }
+      }
+      delete editor;
+    }), true);
+}
+
+/**
+ * Implementation of removeFolder method for Library
+ *
+ * Removes the currently selected folder (if more than one exists).
+ */
+void Library::removeFolder() {
+  if (selectedFolderIndex >= 0 &&
+      selectedFolderIndex < static_cast<int>(trackFolders.size()) &&
+      trackFolders.size() > 1) {
+    trackFolders.erase(trackFolders.begin() + selectedFolderIndex);
+    selectedFolderIndex = 0;
+    directoryComponent.updateContent();
+    directoryComponent.selectRow(selectedFolderIndex);
+    playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+  }
+}
+
+/**
+ * Implementation of renameFolder method for Library
+ *
+ * Prompts user for a new name for the selected folder.
+ */
+void Library::renameFolder() {
+  if (selectedFolderIndex < 0 ||
+      selectedFolderIndex >= static_cast<int>(trackFolders.size()))
+    return;
+
+  auto currentName = trackFolders[selectedFolderIndex].first;
+  auto *editor = new juce::AlertWindow("Rename Folder", "Enter new name:",
+                                       juce::MessageBoxIconType::NoIcon);
+  editor->addTextEditor("name", currentName, "Folder Name:");
+  editor->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+  editor->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+  editor->enterModalState(true, juce::ModalCallbackFunction::create(
+    [this, editor](int result) {
+      if (result == 1) {
+        auto name = editor->getTextEditorContents("name").trim();
+        if (name.isNotEmpty() && selectedFolderIndex >= 0 &&
+            selectedFolderIndex < static_cast<int>(trackFolders.size())) {
+          trackFolders[selectedFolderIndex].first = name;
+          directoryComponent.updateContent();
+          directoryComponent.repaint();
+        }
+      }
+      delete editor;
+    }), true);
+}
+
+/**
+ * Implementation of addFilesToFolder method for Library
+ *
+ * Opens a file chooser dialog allowing multi-selection of audio files,
+ * then adds them to the currently selected folder.
+ */
+void Library::addFilesToFolder() {
+  if (selectedFolderIndex < 0 ||
+      selectedFolderIndex >= static_cast<int>(trackFolders.size()))
+    return;
+
+  fileChooser = std::make_unique<juce::FileChooser>(
+      "Select audio files to add",
+      juce::File::getSpecialLocation(juce::File::userHomeDirectory),
+      formatManager.getWildcardForAllFormats());
+
+  fileChooser->launchAsync(
+      juce::FileBrowserComponent::openMode |
+          juce::FileBrowserComponent::canSelectFiles |
+          juce::FileBrowserComponent::canSelectMultipleItems,
+      [this](const juce::FileChooser &chooser) {
+        auto results = chooser.getResults();
+        if (results.isEmpty())
+          return;
+
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d-%m-%Y %H-%M-%S");
+        auto timeString = oss.str();
+
+        for (auto &audioFile : results) {
+          audioReader.reset(formatManager.createReaderFor(audioFile));
+          if (audioReader != nullptr) {
+            std::hash<std::string> hasher;
+            track thisTrack = {audioFile.getFileNameWithoutExtension(),
+                               audioReader->lengthInSamples /
+                                   audioReader->sampleRate,
+                               juce::URL{audioFile}};
+            size_t hash = hasher(
+                thisTrack.title.toStdString() +
+                std::to_string(thisTrack.lengthInSeconds) +
+                thisTrack.url.toString(false).toStdString() +
+                std::to_string(
+                    trackFolders[selectedFolderIndex].second.size()) +
+                timeString);
+            char hashString[256] = "";
+            snprintf(hashString, sizeof hashString, "%zu", hash);
+            thisTrack.identity = juce::String(hashString);
+            trackFolders[selectedFolderIndex].second.push_back(thisTrack);
+          }
+        }
+        playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+      });
+}
+
+/**
+ * Implementation of importFolderFromDisk method for Library
+ *
+ * Opens a directory chooser, scans the selected folder for audio files,
+ * and adds them as a new library folder.
+ */
+void Library::importFolderFromDisk() {
+  fileChooser = std::make_unique<juce::FileChooser>(
+      "Select a folder to import",
+      juce::File::getSpecialLocation(juce::File::userHomeDirectory));
+
+  fileChooser->launchAsync(
+      juce::FileBrowserComponent::openMode |
+          juce::FileBrowserComponent::canSelectDirectories,
+      [this](const juce::FileChooser &chooser) {
+        auto result = chooser.getResult();
+        if (!result.isDirectory())
+          return;
+
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d-%m-%Y %H-%M-%S");
+        auto timeString = oss.str();
+
+        std::pair<juce::String, std::vector<track>> thisFolder;
+        thisFolder.first = result.getFileNameWithoutExtension();
+
+        auto childFiles = result.findChildFiles(
+            juce::File::TypesOfFileToFind::findFiles, false,
+            formatManager.getWildcardForAllFormats());
+
+        for (auto &file : childFiles) {
+          audioReader.reset(formatManager.createReaderFor(file));
+          if (audioReader != nullptr) {
+            std::hash<std::string> hasher;
+            track thisTrack = {file.getFileNameWithoutExtension(),
+                               audioReader->lengthInSamples /
+                                   audioReader->sampleRate,
+                               juce::URL{file}};
+            size_t hash = hasher(
+                thisTrack.title.toStdString() +
+                std::to_string(thisTrack.lengthInSeconds) +
+                thisTrack.url.toString(false).toStdString() +
+                std::to_string(thisFolder.second.size()) +
+                timeString);
+            char hashString[256] = "";
+            snprintf(hashString, sizeof hashString, "%zu", hash);
+            thisTrack.identity = juce::String(hashString);
+            thisFolder.second.push_back(thisTrack);
+          }
+        }
+
+        if (!thisFolder.second.empty()) {
+          trackFolders.push_back(thisFolder);
+          selectedFolderIndex = static_cast<int>(trackFolders.size()) - 1;
+          directoryComponent.updateContent();
+          directoryComponent.selectRow(selectedFolderIndex);
+          playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+        }
+      });
+}
+
+/**
+ * Implementation of removeSelectedTrack method for Library
+ *
+ * Removes the currently selected track from the current folder.
+ */
+void Library::removeSelectedTrack() {
+  if (selectedFolderIndex < 0 ||
+      selectedFolderIndex >= static_cast<int>(trackFolders.size()))
+    return;
+
+  if (!playlist.trackIsSelected())
+    return;
+
+  auto selectedTrackObj = playlist.getSelectedTrack();
+  auto &selectedPlaylist = trackFolders[selectedFolderIndex].second;
+  for (auto it = selectedPlaylist.begin(); it != selectedPlaylist.end(); ++it) {
+    if (it->identity == selectedTrackObj.identity) {
+      selectedPlaylist.erase(it);
+      break;
+    }
+  }
+  playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+}
 
 //==============================================================================
