@@ -12,7 +12,8 @@
 PlaylistComponent::PlaylistComponent(juce::AudioFormatManager& _formatManager) : formatManager(_formatManager), trackTitles(NULL)
 {
 	tableComponent.getHeader().addColumn("Track Title", 1, 300);
-	tableComponent.getHeader().addColumn("Length", 2, 150);
+	tableComponent.getHeader().addColumn("Length", 2, 100);
+	tableComponent.getHeader().addColumn("BPM", 3, 80);
 	tableComponent.setModel(this);
 	tableComponent.setColour(juce::TableListBox::ColourIds::backgroundColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 	addAndMakeVisible(tableComponent);
@@ -154,6 +155,13 @@ void PlaylistComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId
 		else if (tableComponent.getHeader().getColumnName(columnId) == "Length") {
 			std::string time = track::getLengthString(displayTrackTitles.at(rowNumber)->lengthInSeconds);
 			g.drawText(time, 2, 0, width - 4, height, juce::Justification::centredLeft, true);
+		}
+		else if (tableComponent.getHeader().getColumnName(columnId) == "BPM") {
+			double bpm = displayTrackTitles.at(rowNumber)->bpm;
+			if (bpm > 0.0)
+				g.drawText(juce::String(bpm, 1), 2, 0, width - 4, height, juce::Justification::centredLeft, true);
+			else
+				g.drawText("...", 2, 0, width - 4, height, juce::Justification::centredLeft, true);
 		}
 	}
 };

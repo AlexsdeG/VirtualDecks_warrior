@@ -3,6 +3,8 @@
 
 #include "CustomLookAndFeel.h"
 #include "PlaylistComponent.h"
+#include "BpmAnalysisManager.h"
+#include "FileHasher.h"
 #include <JuceHeader.h>
 
 //==============================================================================
@@ -19,7 +21,8 @@
 class Library : public juce::Component,
                 public juce::TableListBoxModel,
                 public juce::FileDragAndDropTarget,
-                public juce::Button::Listener {
+                public juce::Button::Listener,
+                public BpmAnalysisManager::Listener {
 public:
   //==============================================================================
 
@@ -219,6 +222,15 @@ private:
 
   /// File chooser for adding audio files
   std::unique_ptr<juce::FileChooser> fileChooser;
+
+  /// Background BPM analysis manager
+  BpmAnalysisManager bpmAnalysisManager;
+
+  /// Queue all tracks in a folder for background BPM analysis
+  void queueBpmAnalysis(std::vector<track>& tracks);
+
+  /// Callback when background BPM analysis completes
+  void bpmAnalysisComplete(const juce::String& fileHash, double bpm) override;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Library)
 };

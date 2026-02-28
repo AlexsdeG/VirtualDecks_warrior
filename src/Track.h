@@ -26,6 +26,12 @@ struct track {
 	/// Identity hash of track
 	juce::String identity;
 
+	/// Content-based file hash for persistent data retrieval
+	juce::String fileHash;
+
+	/// Detected or cached BPM (0.0 if unknown/pending)
+	double bpm = 0.0;
+
 	//==============================================================================
 
 	/**

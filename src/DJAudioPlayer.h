@@ -250,20 +250,4 @@ private:
 
 	/// Beat grid for the loaded track
 	BeatGrid beatGrid;
-
-	/**
-	 * Attempt to read BPM from audio file metadata via TagLib.
-	 *
-	 * @param filePath Absolute path to the audio file
-	 * @return BPM value, or 0.0 if not found
-	 */
-	double readBpmFromMetadata(const juce::String& filePath);
-
-	/**
-	 * Perform onset-based BPM detection on loaded audio.
-	 *
-	 * @param reader The AudioFormatReader for the loaded file
-	 * @return Detected BPM, or 0.0 if detection fails
-	 */
-	double detectBpmFromAudio(juce::AudioFormatReader* reader);
 };

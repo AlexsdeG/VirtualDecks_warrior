@@ -13,6 +13,9 @@ set(SOURCE_FILES
     WaveformDisplay.cpp
     ZoomedWaveform.cpp
     BeatGridConfig.cpp
+    TrackDataCache.cpp
+    BpmDetector.cpp
+    BpmAnalysisManager.cpp
 )
 
 if(TARGET juceDjApp)

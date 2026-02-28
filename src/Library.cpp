@@ -13,7 +13,8 @@
  *
  */
 Library::Library(juce::AudioFormatManager &_formatManager)
-    : formatManager(_formatManager), playlist(_formatManager) {
+    : formatManager(_formatManager), playlist(_formatManager),
+      bpmAnalysisManager(_formatManager) {
   filePath = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
                  .getChildFile(".otodecks")
                  .getChildFile("Resource.xml")
@@ -42,6 +43,11 @@ Library::Library(juce::AudioFormatManager &_formatManager)
           track refSong{song.getProperty("title"), song.getProperty("length"),
                         juce::URL(song.getProperty("url").toString()),
                         song.getProperty("identity")};
+          // Read fileHash and bpm if present (new fields)
+          if (song.hasProperty("fileHash"))
+            refSong.fileHash = song.getProperty("fileHash").toString();
+          if (song.hasProperty("bpm"))
+            refSong.bpm = static_cast<double>(song.getProperty("bpm"));
           folder.second.push_back(refSong);
         }
         trackFolders.push_back(folder);
@@ -90,6 +96,12 @@ Library::Library(juce::AudioFormatManager &_formatManager)
   addFilesBtn.addListener(this);
   removeTrackBtn.addListener(this);
   importFolderBtn.addListener(this);
+
+  bpmAnalysisManager.addListener(this);
+
+  // Queue BPM analysis for any tracks missing BPM data
+  for (auto& folder : trackFolders)
+    queueBpmAnalysis(folder.second);
 }
 
 /**
@@ -100,6 +112,8 @@ Library::Library(juce::AudioFormatManager &_formatManager)
  *
  */
 Library::~Library() {
+  bpmAnalysisManager.removeListener(this);
+
   juce::File file(filePath);
   file.deleteFile();
 
@@ -116,6 +130,8 @@ Library::~Library() {
       song.setProperty("url", trackFolders[i].second[j].url.toString(false),
                        nullptr);
       song.setProperty("identity", trackFolders[i].second[j].identity, nullptr);
+      song.setProperty("fileHash", trackFolders[i].second[j].fileHash, nullptr);
+      song.setProperty("bpm", trackFolders[i].second[j].bpm, nullptr);
       folder.addChild(song, j, nullptr);
     }
     main.addChild(folder, i, nullptr);
@@ -361,6 +377,9 @@ void Library::filesDropped(const juce::StringArray &files, int x, int y) {
           snprintf(hashString, sizeof hashString, "%zu", hash);
           DBG(hashString);
           thisTrack.identity = juce::String(hashString);
+          thisTrack.fileHash = FileHasher::computeHash(audioFile);
+          if (thisTrack.fileHash.isNotEmpty() && TrackDataCache::exists(thisTrack.fileHash))
+            thisTrack.bpm = TrackDataCache::load(thisTrack.fileHash).detectedBpm;
           trackFolders[selectedFolderIndex].second.push_back(thisTrack);
         }
       }
@@ -392,6 +411,9 @@ void Library::filesDropped(const juce::StringArray &files, int x, int y) {
             snprintf(hashString, sizeof hashString, "%zu", hash);
             DBG(hashString);
             thisTrack.identity = juce::String(hashString);
+            thisTrack.fileHash = FileHasher::computeHash(file);
+            if (thisTrack.fileHash.isNotEmpty() && TrackDataCache::exists(thisTrack.fileHash))
+              thisTrack.bpm = TrackDataCache::load(thisTrack.fileHash).detectedBpm;
             thisFolder.second.push_back(thisTrack);
           }
         }
@@ -401,6 +423,7 @@ void Library::filesDropped(const juce::StringArray &files, int x, int y) {
     }
   }
   if (selectedFolderIndex != -1) {
+    queueBpmAnalysis(trackFolders[selectedFolderIndex].second);
     playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
   }
   directoryComponent.updateContent();
@@ -559,9 +582,13 @@ void Library::addFilesToFolder() {
             char hashString[256] = "";
             snprintf(hashString, sizeof hashString, "%zu", hash);
             thisTrack.identity = juce::String(hashString);
+            thisTrack.fileHash = FileHasher::computeHash(audioFile);
+            if (thisTrack.fileHash.isNotEmpty() && TrackDataCache::exists(thisTrack.fileHash))
+              thisTrack.bpm = TrackDataCache::load(thisTrack.fileHash).detectedBpm;
             trackFolders[selectedFolderIndex].second.push_back(thisTrack);
           }
         }
+        queueBpmAnalysis(trackFolders[selectedFolderIndex].second);
         playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
       });
 }
@@ -615,6 +642,9 @@ void Library::importFolderFromDisk() {
             char hashString[256] = "";
             snprintf(hashString, sizeof hashString, "%zu", hash);
             thisTrack.identity = juce::String(hashString);
+            thisTrack.fileHash = FileHasher::computeHash(file);
+            if (thisTrack.fileHash.isNotEmpty() && TrackDataCache::exists(thisTrack.fileHash))
+              thisTrack.bpm = TrackDataCache::load(thisTrack.fileHash).detectedBpm;
             thisFolder.second.push_back(thisTrack);
           }
         }
@@ -624,6 +654,7 @@ void Library::importFolderFromDisk() {
           selectedFolderIndex = static_cast<int>(trackFolders.size()) - 1;
           directoryComponent.updateContent();
           directoryComponent.selectRow(selectedFolderIndex);
+          queueBpmAnalysis(trackFolders[selectedFolderIndex].second);
           playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
         }
       });
@@ -654,3 +685,61 @@ void Library::removeSelectedTrack() {
 }
 
 //==============================================================================
+
+/**
+ * Implementation of queueBpmAnalysis method for Library
+ *
+ * Queues background BPM analysis for tracks that don't yet have a BPM value.
+ * Computes fileHash on-the-fly if missing.
+ */
+void Library::queueBpmAnalysis(std::vector<track>& tracks)
+{
+	DBG("Library::queueBpmAnalysis - " + juce::String(static_cast<int>(tracks.size())) + " tracks");
+	for (auto& t : tracks)
+	{
+		// Compute fileHash if not yet set
+		if (t.fileHash.isEmpty())
+		{
+			juce::File audioFile = t.url.getLocalFile();
+			DBG("  Computing hash for: " + t.title + " file=" + audioFile.getFullPathName() + " exists=" + juce::String(audioFile.existsAsFile() ? "yes" : "no"));
+			if (audioFile.existsAsFile())
+				t.fileHash = FileHasher::computeHash(audioFile);
+		}
+
+		// Queue analysis if BPM is unknown
+		if (t.bpm <= 0.0 && t.fileHash.isNotEmpty())
+		{
+			juce::File audioFile = t.url.getLocalFile();
+			bpmAnalysisManager.analyzeTrack(audioFile, t.fileHash);
+		}
+	}
+}
+
+/**
+ * Implementation of bpmAnalysisComplete callback for Library
+ *
+ * Called on the message thread when a background BPM analysis finishes.
+ * Updates all tracks with the matching fileHash and refreshes the playlist.
+ */
+void Library::bpmAnalysisComplete(const juce::String& fileHash, double bpm)
+{
+	DBG("Library::bpmAnalysisComplete - hash=" + fileHash + " bpm=" + juce::String(bpm));
+	bool updated = false;
+	for (auto& folder : trackFolders)
+	{
+		for (auto& t : folder.second)
+		{
+			if (t.fileHash == fileHash && t.bpm <= 0.0)
+			{
+				t.bpm = bpm;
+				updated = true;
+			}
+		}
+	}
+
+	if (updated && selectedFolderIndex >= 0 &&
+		selectedFolderIndex < static_cast<int>(trackFolders.size()))
+	{
+		playlist.setTrackTitles(trackFolders[selectedFolderIndex].second);
+	}
+}

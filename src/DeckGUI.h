@@ -9,7 +9,7 @@
 
 #include "CustomLookAndFeel.h"
 #include "Library.h"
-#include "BeatGridConfig.h"
+#include "TrackDataCache.h"
 //==============================================================================
 
 /**
@@ -293,8 +293,14 @@ private:
 	/// Timestamps of tap tempo presses
 	std::vector<double> tapTimes;
 
-	/// Identity hash of the currently loaded track
+	/// Identity hash of the currently loaded track (legacy)
 	juce::String currentTrackIdentity;
+
+	/// Content-based file hash of the currently loaded track
+	juce::String currentFileHash;
+
+	/// Helper to save current beat grid + detected BPM to the track data cache
+	void saveTrackData(const BeatGrid& grid);
 
 	/// Sets visibility of cue buttons
 	void setCueButtonsVisible(bool visible);

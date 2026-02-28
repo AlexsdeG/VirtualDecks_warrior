@@ -1,7 +1,8 @@
 
 #include "DeckGUI.h"
+#include "FileHasher.h"
 
-//==============================================================================
+//============================================================================================================================================================
 
 /**
  * Implementation of a constructor for DeckGUI
@@ -112,8 +113,7 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 			grid.bpm = newBpm;
 			grid.isManualBpm = true;
 			player->setBeatGrid(grid);
-			if (currentTrackIdentity.isNotEmpty())
-				BeatGridConfig::save(currentTrackIdentity, grid);
+			saveTrackData(grid);
 		}
 	};
 	gridBpmEditor.onReturnKey = applyBpmFromEditor;
@@ -366,8 +366,7 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		grid.gridOffsetSecs -= 0.01;
 		grid.isManualOffset = true;
 		player->setBeatGrid(grid);
-		if (currentTrackIdentity.isNotEmpty())
-			BeatGridConfig::save(currentTrackIdentity, grid);
+		saveTrackData(grid);
 	}
 
 	if (button == &gridNudgeRightBtn) {
@@ -375,8 +374,7 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		grid.gridOffsetSecs += 0.01;
 		grid.isManualOffset = true;
 		player->setBeatGrid(grid);
-		if (currentTrackIdentity.isNotEmpty())
-			BeatGridConfig::save(currentTrackIdentity, grid);
+		saveTrackData(grid);
 	}
 
 	if (button == &tapTempoBtn) {
@@ -399,8 +397,7 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 				grid.isManualBpm = true;
 				player->setBeatGrid(grid);
 				updateGridBpmDisplay();
-				if (currentTrackIdentity.isNotEmpty())
-					BeatGridConfig::save(currentTrackIdentity, grid);
+				saveTrackData(grid);
 			}
 		}
 	}
@@ -411,8 +408,7 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		grid.bpm = detectedBpm;
 		player->setBeatGrid(grid);
 		updateGridBpmDisplay();
-		if (currentTrackIdentity.isNotEmpty())
-			BeatGridConfig::save(currentTrackIdentity, grid);
+		saveTrackData(grid);
 	}
 
 	if (player->isLoaded()) {
@@ -587,6 +583,7 @@ void DeckGUI::filesDropped(const juce::StringArray& files, int x, int y) {
 	if (files.size() == 1 && x < getWidth() && y < getHeight()) {
 		juce::File file = juce::File{ files[0] };
 		track track{ file.getFileNameWithoutExtension(), 0, juce::URL{ file } };
+		track.fileHash = FileHasher::computeHash(file);
 		loadDeck(track);
 	}
 };
@@ -700,10 +697,15 @@ void DeckGUI::loadDeck(track track) {
 
 	// Load beat grid config for this track
 	currentTrackIdentity = track.identity;
-	if (currentTrackIdentity.isNotEmpty()) {
-		BeatGrid savedGrid = BeatGridConfig::load(currentTrackIdentity);
-		if (savedGrid.bpm > 0.0) {
-			player->setBeatGrid(savedGrid);
+	currentFileHash = track.fileHash;
+	if (currentFileHash.isNotEmpty()) {
+		TrackData cached = TrackDataCache::load(currentFileHash);
+		if (cached.beatGrid.bpm > 0.0) {
+			player->setBeatGrid(cached.beatGrid);
+		} else if (cached.detectedBpm > 0.0) {
+			BeatGrid grid;
+			grid.bpm = cached.detectedBpm;
+			player->setBeatGrid(grid);
 		}
 	}
 	updateGridBpmDisplay();
@@ -716,6 +718,23 @@ void DeckGUI::loadDeck(track track) {
 		playButton.setToggleState(false, juce::NotificationType::dontSendNotification);
 	}
 };
+
+//==============================================================================
+
+/**
+ * Implementation of saveTrackData method for DeckGUI
+ *
+ * Persists the given beat grid along with the detected BPM to the
+ * track data cache, keyed by the current file hash.
+ */
+void DeckGUI::saveTrackData(const BeatGrid& grid) {
+	if (currentFileHash.isEmpty())
+		return;
+	TrackData data = TrackDataCache::load(currentFileHash);
+	data.beatGrid = grid;
+	data.detectedBpm = player->getDetectedBpm();
+	TrackDataCache::save(currentFileHash, data);
+}
 
 //==============================================================================
 
