@@ -102,6 +102,20 @@ void WaveformDisplay::setCuePoints(std::map<juce::TextButton*, std::pair<double,
 	DBG("cueTargets size" << cueTargets.size());
 };
 
+/**
+ * Implementation of setBeatGrid method for WaveformDisplay
+ *
+ * Updates the beat grid parameters used for rendering beat lines.
+ */
+void WaveformDisplay::setBeatGrid(double bpm, double offsetSecs, double speed) {
+	if (beatGridBpm != bpm || beatGridOffsetSecs != offsetSecs || speedRatio != speed) {
+		beatGridBpm = bpm;
+		beatGridOffsetSecs = offsetSecs;
+		speedRatio = speed;
+		repaint();
+	}
+};
+
 //==============================================================================
 
 /**

@@ -1,6 +1,7 @@
 
 #pragma once
 #include <JuceHeader.h>
+#include "BeatGrid.h"
 
 /**
  * Definition of a DJAudioplayer
@@ -161,6 +162,36 @@ public:
 
 	//==============================================================================
 
+	/**
+	 * Get the detected or manually set BPM of the loaded track.
+	 * Returns 0.0 if no BPM has been determined.
+	 */
+	double getDetectedBpm() const;
+
+	/**
+	 * Get the effective BPM (detected BPM adjusted by current speed ratio).
+	 */
+	double getCurrentBpm() const;
+
+	/**
+	 * Get the current speed/resampling ratio.
+	 */
+	double getSpeedRatio() const;
+
+	/**
+	 * Get the current beat grid for the loaded track.
+	 */
+	const BeatGrid& getBeatGrid() const;
+
+	/**
+	 * Set the beat grid for the loaded track.
+	 *
+	 * @param grid The BeatGrid to apply
+	 */
+	void setBeatGrid(const BeatGrid& grid);
+
+	//==============================================================================
+
 private:
 
 	/// Reference assigned to the AudioFormatManager passed into the constructor
@@ -210,4 +241,29 @@ private:
 
 	/// float to store the audio source RMS level
 	float level;
+
+	/// Detected BPM from metadata or onset analysis
+	double detectedBpm = 0.0;
+
+	/// Current speed/resampling ratio
+	double currentSpeedRatio = 1.0;
+
+	/// Beat grid for the loaded track
+	BeatGrid beatGrid;
+
+	/**
+	 * Attempt to read BPM from audio file metadata via TagLib.
+	 *
+	 * @param filePath Absolute path to the audio file
+	 * @return BPM value, or 0.0 if not found
+	 */
+	double readBpmFromMetadata(const juce::String& filePath);
+
+	/**
+	 * Perform onset-based BPM detection on loaded audio.
+	 *
+	 * @param reader The AudioFormatReader for the loaded file
+	 * @return Detected BPM, or 0.0 if detection fails
+	 */
+	double detectBpmFromAudio(juce::AudioFormatReader* reader);
 };

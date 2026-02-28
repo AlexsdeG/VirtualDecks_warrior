@@ -22,6 +22,19 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 		addAndMakeVisible(*label);
 	}
 
+	// BPM value and percent labels
+	bpmValueLabel.setEditable(false);
+	bpmValueLabel.setJustificationType(juce::Justification::centred);
+	bpmValueLabel.setFont(juce::Font(juce::FontOptions(16.0f)).boldened());
+	bpmValueLabel.setColour(juce::Label::textColourId, theme);
+	addAndMakeVisible(bpmValueLabel);
+
+	bpmPercentLabel.setEditable(false);
+	bpmPercentLabel.setJustificationType(juce::Justification::centred);
+	bpmPercentLabel.setFont(juce::Font(juce::FontOptions(11.0f)));
+	bpmPercentLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+	addAndMakeVisible(bpmPercentLabel);
+
 	addAndMakeVisible(playButton);
 	addAndMakeVisible(volSlider);
 	addAndMakeVisible(speedSlider);
@@ -71,6 +84,59 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 		cue->addMouseListener(this, false);
 		cue->setLookAndFeel(&customLookAndFeel);
 	}
+
+	// Tab buttons for cue/grid switching
+	addAndMakeVisible(cueTabButton);
+	addAndMakeVisible(gridTabButton);
+	cueTabButton.addListener(this);
+	gridTabButton.addListener(this);
+	cueTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
+	gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+
+	// Beat grid controls
+	gridBpmLabel.setEditable(false);
+	gridBpmLabel.setJustificationType(juce::Justification::centredLeft);
+	gridBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+	addChildComponent(gridBpmLabel);
+
+	gridBpmEditor.setJustification(juce::Justification::centred);
+	gridBpmEditor.setInputRestrictions(7, "0123456789.");
+	gridBpmEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	gridBpmEditor.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+	gridBpmEditor.setColour(juce::TextEditor::outlineColourId, theme.withAlpha(0.5f));
+	auto applyBpmFromEditor = [this]() {
+		double newBpm = gridBpmEditor.getText().getDoubleValue();
+		if (newBpm > 20.0 && newBpm < 300.0) {
+			BeatGrid grid = player->getBeatGrid();
+			grid.bpm = newBpm;
+			grid.isManualBpm = true;
+			player->setBeatGrid(grid);
+			if (currentTrackIdentity.isNotEmpty())
+				BeatGridConfig::save(currentTrackIdentity, grid);
+		}
+	};
+	gridBpmEditor.onReturnKey = applyBpmFromEditor;
+	gridBpmEditor.onFocusLost = applyBpmFromEditor;
+	addChildComponent(gridBpmEditor);
+
+	gridNudgeLeftBtn.addListener(this);
+	gridNudgeRightBtn.addListener(this);
+	tapTempoBtn.addListener(this);
+	gridResetBtn.addListener(this);
+	gridNudgeLeftBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	gridNudgeRightBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	tapTempoBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	gridResetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	addChildComponent(gridNudgeLeftBtn);
+	addChildComponent(gridNudgeRightBtn);
+	addChildComponent(gridOffsetLabel);
+	addChildComponent(tapTempoBtn);
+	addChildComponent(gridResetBtn);
+
+	gridOffsetLabel.setEditable(false);
+	gridOffsetLabel.setJustificationType(juce::Justification::centred);
+	gridOffsetLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+	gridOffsetLabel.setFont(juce::Font(juce::FontOptions(10.0f)));
 
 	const std::unique_ptr<juce::XmlElement> playButton_xml(juce::XmlDocument::parse(BinaryData::playButton_svg));
 	const std::unique_ptr<juce::XmlElement> playButtonHover_xml(juce::XmlDocument::parse(BinaryData::playButtonHover_svg));
@@ -197,6 +263,11 @@ void DeckGUI::resized()
 	filter.setBounds(volXOffset, rowH * 5.8, 50, 50);
 	filterLabel.setBounds(volXOffset, rowH * 6.9, 50, 50);
 	double mainXOffset = theme == juce::Colours::hotpink ? getWidth() * 7 / 32 : 0;
+
+	// BPM value label above speed slider
+	bpmValueLabel.setBounds(mainXOffset, rowH * 1.3, getWidth() / 8, 20);
+	bpmPercentLabel.setBounds(mainXOffset, rowH * 1.3 + 18, getWidth() / 8, 14);
+
 	speedSlider.setBounds(mainXOffset, rowH * 2, getWidth() / 8, rowH * 3);
 	speedLabel.setBounds(mainXOffset, rowH * 5 + 5, getWidth() / 8, rowH * 0.5);
 	jogWheel.setBounds(mainXOffset + getWidth() * 22.5 / 32 - 98.9, 5 + rowH * 2, (rowH * 3.3) - 10, (rowH * 3.3) - 10);
@@ -209,12 +280,36 @@ void DeckGUI::resized()
 	double yOffset = 5 + rowH * 2;
 	double cellLength = (getWidth() * 18.5 / 32 - 105) / 3;
 	double cellHeight = 44.45;
+
+	// Tab buttons above cue/grid area
+	double tabWidth = cellLength * 1.5;
+	double tabHeight = 20;
+	cueTabButton.setBounds(xOffset, yOffset - tabHeight - 2, tabWidth, tabHeight);
+	gridTabButton.setBounds(xOffset + tabWidth + 2, yOffset - tabHeight - 2, tabWidth, tabHeight);
+
+	// Cue buttons (same as before)
 	for (auto i = 0; i < 3; ++i) {
 		for (auto j = 0; j < 2; ++j) {
 			int index = i * 2 + j;
 			cues[index]->setBounds(i * cellLength + xOffset, j * cellHeight + 4 + yOffset, cellLength - 4, cellHeight - 4);
 		}
 	}
+
+	// Beat grid controls layout (same area as cue buttons)
+	double gridRow1Y = yOffset + 4;
+	double gridRow2Y = yOffset + cellHeight + 4;
+	double ctrlWidth = cellLength - 4;
+
+	gridBpmLabel.setBounds(xOffset, gridRow1Y, ctrlWidth * 0.4, cellHeight - 4);
+	gridBpmEditor.setBounds(xOffset + ctrlWidth * 0.4, gridRow1Y, ctrlWidth * 0.6, cellHeight - 4);
+
+	gridOffsetLabel.setBounds(xOffset + cellLength, gridRow1Y, ctrlWidth, 14);
+	gridNudgeLeftBtn.setBounds(xOffset + cellLength, gridRow1Y + 14, ctrlWidth * 0.5 - 2, cellHeight - 18);
+	gridNudgeRightBtn.setBounds(xOffset + cellLength + ctrlWidth * 0.5, gridRow1Y + 14, ctrlWidth * 0.5 - 2, cellHeight - 18);
+
+	tapTempoBtn.setBounds(xOffset + cellLength * 2, gridRow1Y, ctrlWidth, cellHeight - 4);
+
+	gridResetBtn.setBounds(xOffset, gridRow2Y, ctrlWidth, cellHeight - 4);
 
 	lowBandFilter.setBounds(xOffset, rowH * 5.8, 50, 50);
 	midBandFilter.setBounds(xOffset + getWidth() / 5, rowH * 5.8, 50, 50);
@@ -242,9 +337,81 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		playButton.setButtonStyle(juce::DrawableButton::ButtonStyle::ImageFitted);
 	}
 
-
 	if (button == &loadButton && library->selectionIsValid()) {
 		loadDeck(library->getSelectedTrack());
+	}
+
+	// Tab switching
+	if (button == &cueTabButton) {
+		cueGridMode = CueGridMode::HotCues;
+		cueTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
+		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		setCueButtonsVisible(true);
+		setGridControlsVisible(false);
+	}
+
+	if (button == &gridTabButton) {
+		cueGridMode = CueGridMode::BeatGrid;
+		gridTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
+		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		setCueButtonsVisible(false);
+		setGridControlsVisible(true);
+		updateGridBpmDisplay();
+	}
+
+	// Grid control buttons
+	if (button == &gridNudgeLeftBtn) {
+		BeatGrid grid = player->getBeatGrid();
+		grid.gridOffsetSecs -= 0.01;
+		grid.isManualOffset = true;
+		player->setBeatGrid(grid);
+		if (currentTrackIdentity.isNotEmpty())
+			BeatGridConfig::save(currentTrackIdentity, grid);
+	}
+
+	if (button == &gridNudgeRightBtn) {
+		BeatGrid grid = player->getBeatGrid();
+		grid.gridOffsetSecs += 0.01;
+		grid.isManualOffset = true;
+		player->setBeatGrid(grid);
+		if (currentTrackIdentity.isNotEmpty())
+			BeatGridConfig::save(currentTrackIdentity, grid);
+	}
+
+	if (button == &tapTempoBtn) {
+		double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+		if (!tapTimes.empty() && (now - tapTimes.back()) > 3.0)
+			tapTimes.clear(); // Reset if too long between taps
+
+		tapTimes.push_back(now);
+
+		if (tapTimes.size() >= 2) {
+			// Average the last 8 intervals (or fewer if not enough taps)
+			size_t count = std::min(tapTimes.size() - 1, static_cast<size_t>(8));
+			double totalInterval = tapTimes.back() - tapTimes[tapTimes.size() - 1 - count];
+			double avgInterval = totalInterval / static_cast<double>(count);
+			double tapBpm = 60.0 / avgInterval;
+
+			if (tapBpm > 20.0 && tapBpm < 300.0) {
+				BeatGrid grid = player->getBeatGrid();
+				grid.bpm = std::round(tapBpm * 10.0) / 10.0;
+				grid.isManualBpm = true;
+				player->setBeatGrid(grid);
+				updateGridBpmDisplay();
+				if (currentTrackIdentity.isNotEmpty())
+					BeatGridConfig::save(currentTrackIdentity, grid);
+			}
+		}
+	}
+
+	if (button == &gridResetBtn) {
+		double detectedBpm = player->getDetectedBpm();
+		BeatGrid grid;
+		grid.bpm = detectedBpm;
+		player->setBeatGrid(grid);
+		updateGridBpmDisplay();
+		if (currentTrackIdentity.isNotEmpty())
+			BeatGridConfig::save(currentTrackIdentity, grid);
 	}
 
 	if (player->isLoaded()) {
@@ -465,6 +632,31 @@ void DeckGUI::timerCallback() {
 		volRMS = player->getRMSLevel();
 		repaint();
 	}
+
+	// Update BPM display
+	double currentBpm = player->getCurrentBpm();
+	if (currentBpm > 0.0) {
+		bpmValueLabel.setText(juce::String(currentBpm, 1), juce::dontSendNotification);
+	}
+	else {
+		bpmValueLabel.setText("---", juce::dontSendNotification);
+	}
+
+	double speedRatio = player->getSpeedRatio();
+	if (std::abs(speedRatio - 1.0) > 0.001 && currentBpm > 0.0) {
+		double pct = (speedRatio - 1.0) * 100.0;
+		juce::String sign = pct > 0 ? "+" : "";
+		bpmPercentLabel.setText(sign + juce::String(pct, 1) + "%", juce::dontSendNotification);
+	}
+	else {
+		bpmPercentLabel.setText("", juce::dontSendNotification);
+	}
+
+	// Update beat grid data on waveform displays
+	const BeatGrid& grid = player->getBeatGrid();
+	for (auto* display : displays) {
+		display->setBeatGrid(grid.bpm, grid.gridOffsetSecs, speedRatio);
+	}
 }
 
 //============================================================================== 
@@ -489,6 +681,16 @@ void DeckGUI::loadDeck(track track) {
 	player->setGain(volSlider.getValue(), true);
 	cueTargets.clear();
 
+	// Load beat grid config for this track
+	currentTrackIdentity = track.identity;
+	if (currentTrackIdentity.isNotEmpty()) {
+		BeatGrid savedGrid = BeatGridConfig::load(currentTrackIdentity);
+		if (savedGrid.bpm > 0.0) {
+			player->setBeatGrid(savedGrid);
+		}
+	}
+	updateGridBpmDisplay();
+
 	if (modeIsPlaying) {
 		playButton.setToggleState(true, juce::NotificationType::dontSendNotification);
 		player->start();
@@ -498,4 +700,44 @@ void DeckGUI::loadDeck(track track) {
 	}
 };
 
-//============================================================================== 
+//==============================================================================
+
+/**
+ * Implementation of setCueButtonsVisible method for DeckGUI
+ *
+ * Shows or hides all cue buttons.
+ */
+void DeckGUI::setCueButtonsVisible(bool visible) {
+	for (auto& cue : cues)
+		cue->setVisible(visible);
+}
+
+/**
+ * Implementation of setGridControlsVisible method for DeckGUI
+ *
+ * Shows or hides all beat grid control components.
+ */
+void DeckGUI::setGridControlsVisible(bool visible) {
+	gridBpmLabel.setVisible(visible);
+	gridBpmEditor.setVisible(visible);
+	gridNudgeLeftBtn.setVisible(visible);
+	gridNudgeRightBtn.setVisible(visible);
+	gridOffsetLabel.setVisible(visible);
+	tapTempoBtn.setVisible(visible);
+	gridResetBtn.setVisible(visible);
+}
+
+/**
+ * Implementation of updateGridBpmDisplay method for DeckGUI
+ *
+ * Updates the grid BPM editor text from the player's current beat grid.
+ */
+void DeckGUI::updateGridBpmDisplay() {
+	double bpm = player->getBeatGrid().bpm;
+	if (bpm > 0.0)
+		gridBpmEditor.setText(juce::String(bpm, 1), false);
+	else
+		gridBpmEditor.setText("", false);
+}
+
+//==============================================================================

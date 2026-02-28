@@ -9,6 +9,7 @@
 
 #include "CustomLookAndFeel.h"
 #include "Library.h"
+#include "BeatGridConfig.h"
 //==============================================================================
 
 /**
@@ -169,10 +170,16 @@ private:
 	juce::Slider volSlider{ juce::Slider::SliderStyle::LinearVertical , juce::Slider::TextEntryBoxPosition::NoTextBox };
 
 	/// juce::Label to label the BPM slider
-	juce::Label speedLabel{ "BPM", "BPM" };
+	juce::Label speedLabel{ "SPEED", "SPEED" };
 
 	/// juce::Slider to adjust the resampled speed(BPM) of the audio source.
 	juce::Slider speedSlider{ juce::Slider::SliderStyle::LinearVertical , juce::Slider::TextEntryBoxPosition::NoTextBox };
+
+	/// juce::Label to display the current BPM value
+	juce::Label bpmValueLabel{ "BPM_VAL", "---" };
+
+	/// juce::Label to display the speed % deviation
+	juce::Label bpmPercentLabel{ "BPM_PCT", "" };
 
 	/// juce::Slider to adjust the low pass/high pass filter on the audio source.
 	juce::Slider filter{ juce::Slider::SliderStyle::RotaryVerticalDrag , juce::Slider::TextEntryBoxPosition::NoTextBox };
@@ -236,6 +243,60 @@ private:
 
 	/// Determines the average root mean square value derived from the DJAudioPlayer
 	float volRMS;
+
+	//==============================================================================
+	// Tab mode: Hot Cues vs Beat Grid
+
+	/// Enum for the cue/grid tab mode
+	enum class CueGridMode { HotCues, BeatGrid };
+
+	/// Current tab mode
+	CueGridMode cueGridMode = CueGridMode::HotCues;
+
+	/// Tab button for hot cues
+	juce::TextButton cueTabButton{ "CUES" };
+
+	/// Tab button for beat grid controls
+	juce::TextButton gridTabButton{ "GRID" };
+
+	//==============================================================================
+	// Beat Grid Controls
+
+	/// Label for the grid BPM editor
+	juce::Label gridBpmLabel{ "GRID_BPM", "BPM:" };
+
+	/// Editable text field for BPM override
+	juce::TextEditor gridBpmEditor;
+
+	/// Button to nudge grid offset earlier
+	juce::TextButton gridNudgeLeftBtn{ "<" };
+
+	/// Button to nudge grid offset later
+	juce::TextButton gridNudgeRightBtn{ ">" };
+
+	/// Label for nudge buttons
+	juce::Label gridOffsetLabel{ "GRID_OFF", "OFFSET" };
+
+	/// Tap tempo button
+	juce::TextButton tapTempoBtn{ "TAP" };
+
+	/// Button to reset grid to detected values
+	juce::TextButton gridResetBtn{ "RESET" };
+
+	/// Timestamps of tap tempo presses
+	std::vector<double> tapTimes;
+
+	/// Identity hash of the currently loaded track
+	juce::String currentTrackIdentity;
+
+	/// Sets visibility of cue buttons
+	void setCueButtonsVisible(bool visible);
+
+	/// Sets visibility of grid controls
+	void setGridControlsVisible(bool visible);
+
+	/// Updates the grid BPM editor text from the player
+	void updateGridBpmDisplay();
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DeckGUI);
 };

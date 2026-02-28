@@ -1,5 +1,5 @@
 ---
-mode: "ask"
+mode: "agent"
 description: "Add new feature to the DJ application"
 ---
 

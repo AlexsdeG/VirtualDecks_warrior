@@ -47,7 +47,42 @@ void ZoomedWaveform::paint(juce::Graphics& g)
 		if (left < 0) {
 			double widthRect = juce::jmap(fabs(left), (double)0, half * 2, (double)0, (double)getWidth());
 			g.setColour(juce::Colour::fromRGBA(0, 0, 0, 255));
-			g.fillRect(0.0f, 0.0f, (float)widthRect, (float)getHeight() - 1);   // draw an outline around the component
+			g.fillRect(0.0f, 0.0f, (float)widthRect, (float)getHeight() - 1);
+		}
+
+		// Draw beat grid lines
+		if (beatGridBpm > 0.0) {
+			double beatIntervalSecs = 60.0 / beatGridBpm;
+			// Calculate first beat in visible range
+			double firstBeat;
+			if (beatIntervalSecs > 0.0) {
+				firstBeat = std::ceil((left - beatGridOffsetSecs) / beatIntervalSecs) * beatIntervalSecs + beatGridOffsetSecs;
+			}
+			else {
+				firstBeat = left;
+			}
+
+			// Determine the beat index for downbeat emphasis
+			int beatIndex = 0;
+			if (beatIntervalSecs > 0.0)
+				beatIndex = static_cast<int>(std::round((firstBeat - beatGridOffsetSecs) / beatIntervalSecs));
+
+			for (double beatTime = firstBeat; beatTime <= right; beatTime += beatIntervalSecs) {
+				double xPos = juce::jmap(beatTime, left, right, 0.0, (double)getWidth());
+				if (xPos >= 0 && xPos <= getWidth()) {
+					if (beatIndex % 4 == 0) {
+						// Downbeat: brighter line
+						g.setColour(juce::Colours::white.withAlpha(0.5f));
+						g.drawLine((float)xPos, 0.0f, (float)xPos, (float)getHeight(), 1.5f);
+					}
+					else {
+						// Regular beat: subtle line
+						g.setColour(juce::Colours::white.withAlpha(0.2f));
+						g.drawLine((float)xPos, 0.0f, (float)xPos, (float)getHeight(), 1.0f);
+					}
+				}
+				beatIndex++;
+			}
 		}
 
 		for (auto i = 0; i < cueTargets.size(); ++i) {
@@ -59,6 +94,18 @@ void ZoomedWaveform::paint(juce::Graphics& g)
 		}
 		g.setColour(juce::Colours::grey);
 		g.drawRect(getWidth() / 2, 0, 1, getHeight());
+
+		// Draw speed % deviation overlay
+		if (std::abs(speedRatio - 1.0) > 0.001 && beatGridBpm > 0.0) {
+			double pct = (speedRatio - 1.0) * 100.0;
+			juce::String sign = pct > 0 ? "+" : "";
+			juce::String pctText = sign + juce::String(pct, 1) + "%";
+			g.setColour(juce::Colour::fromRGBA(0, 0, 0, 160));
+			g.fillRect(getWidth() - 52, 2, 50, 16);
+			g.setColour(theme);
+			g.setFont(juce::Font(juce::FontOptions(12.0f)));
+			g.drawText(pctText, getWidth() - 52, 2, 50, 16, juce::Justification::centred);
+		}
 	}
 }
 

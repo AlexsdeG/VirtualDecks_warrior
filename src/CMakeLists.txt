@@ -12,6 +12,7 @@ set(SOURCE_FILES
     PlaylistComponent.cpp
     WaveformDisplay.cpp
     ZoomedWaveform.cpp
+    BeatGridConfig.cpp
 )
 
 if(TARGET juceDjApp)

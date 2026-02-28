@@ -76,6 +76,15 @@ public:
 	*/
 	void setCuePoints(std::map<juce::TextButton*, std::pair<double, float>>& _cueTargets);
 
+	/**
+	 * Set the beat grid parameters for visualization.
+	 *
+	 * @param bpm Beats per minute (0 to disable grid lines)
+	 * @param offsetSecs Grid offset in seconds
+	 * @param speed Current playback speed ratio
+	 */
+	void setBeatGrid(double bpm, double offsetSecs, double speed);
+
 	//============================================================================== 
 
 private:
@@ -185,4 +194,13 @@ protected:
 
 	/// Flags if the file is loaded
 	bool isLoaded = false;
+
+	/// Beat grid BPM for visualization
+	double beatGridBpm = 0.0;
+
+	/// Beat grid offset in seconds
+	double beatGridOffsetSecs = 0.0;
+
+	/// Current playback speed ratio
+	double speedRatio = 1.0;
 };
