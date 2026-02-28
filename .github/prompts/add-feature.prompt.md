@@ -11,14 +11,14 @@ You are implementing a new feature for DJDecks.
 
 Before writing any code:
 
-1. **Read `.github/general-instructions.md`** — understand the full architecture, class hierarchy, and all coding rules.
+1. **Read `.github/copilot-instructions.md`** — understand the full architecture, class hierarchy, and all coding rules.
 2. **Identify which components are affected** using the class hierarchy diagram.
 3. **Read every file you plan to modify** — all headers and implementations.
 4. **Read related instruction files**:
-   - Audio changes → `.github/audio-engine.instructions.md`
-   - UI changes → `.github/ui-components.instructions.md`
-   - Library/data changes → `.github/library-data.instructions.md`
-   - Build changes → `.github/build-system.instructions.md`
+   - Audio changes → `.github/instructions/audio-engine.instructions.md`
+   - UI changes → `.github/instructions/ui-components.instructions.md`
+   - Library/data changes → `.github/instructions/library-data.instructions.md`
+   - Build changes → `.github/instructions/build-system.instructions.md`
 
 ## Implementation Planning
 

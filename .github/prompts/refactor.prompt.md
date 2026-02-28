@@ -9,10 +9,10 @@ You are refactoring or improving code quality in DJDecks.
 
 ## Context Gathering Strategy
 
-1. **Read `.github/general-instructions.md`** for the full architecture.
+1. **Read `.github/copilot-instructions.md`** for the full architecture.
 2. **Read ALL files that will be affected** by the refactor — including callers and inheritors.
 3. If touching the waveform hierarchy, read `WaveformDisplay.h`, `ZoomedWaveform.h`, and `JogWheel.h` — protected members are shared.
-4. If touching DJAudioPlayer, read `.github/audio-engine.instructions.md` for chain order rules.
+4. If touching DJAudioPlayer, read `.github/instructions/audio-engine.instructions.md` for chain order rules.
 
 ## Refactoring Guidelines
 

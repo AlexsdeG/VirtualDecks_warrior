@@ -12,7 +12,7 @@ You are adding a new audio effect to DJDecks.
 Before proceeding, read these files to understand the current implementation:
 1. `src/DJAudioPlayer.h` and `src/DJAudioPlayer.cpp` — current audio chain
 2. `src/DeckGUI.h` and `src/DeckGUI.cpp` — how sliders wire to the player
-3. `.github/audio-engine.instructions.md` — audio chain rules and thread safety
+3. `.github/instructions/audio-engine.instructions.md` — audio chain rules and thread safety
 
 ## Implementation Checklist
 

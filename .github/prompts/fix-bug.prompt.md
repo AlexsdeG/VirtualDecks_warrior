@@ -9,7 +9,7 @@ You are diagnosing and fixing a bug in DJDecks.
 
 ## Context Gathering Strategy
 
-1. **Read `.github/general-instructions.md`** to understand the architecture and signal flow.
+1. **Read `.github/copilot-instructions.md`** to understand the architecture and signal flow.
 2. **Read the file(s)** the user mentions or that are likely involved based on the symptom.
 3. **Trace the data flow**: Most bugs involve the chain `UI event → DeckGUI callback → DJAudioPlayer method → audio chain`. Trace which links are involved.
 4. **Check thread boundaries**: If the issue involves audio glitches or crashes, check whether UI-thread code is being called from the audio thread or vice versa.
