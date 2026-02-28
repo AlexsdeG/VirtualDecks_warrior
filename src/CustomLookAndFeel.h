@@ -68,6 +68,16 @@ public:
 	*/
 	void drawTableHeaderBackground(juce::Graphics& g, juce::TableHeaderComponent& header) override;
 
+	/**
+		* Overrides LookAndFeelV4::drawButtonText to draw button text at 8px font size
+		*
+		* @param The graphics object
+		* @param TextButton to be drawn
+		* @param If the button is highlighted
+		* @param If the button is down
+	*/
+	void drawButtonText(juce::Graphics& g, juce::TextButton& button, bool isMouseOverButton, bool isButtonDown) override;
+
 	//==============================================================================
 
 private:

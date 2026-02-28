@@ -64,6 +64,13 @@ private:
 	*/
 	void resized() override;
 
+	/**
+		* Called on mouse down to handle right-click context menus on cue buttons.
+		*
+		* @param juce::MouseEvent object
+	*/
+	void mouseDown(const juce::MouseEvent& event) override;
+
 	//==============================================================================
 
 	/**

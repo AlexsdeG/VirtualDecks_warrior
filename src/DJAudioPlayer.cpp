@@ -162,6 +162,15 @@ double DJAudioPlayer::getPositionRelative() {
 	return (transportSource.getLengthInSeconds() == 0 ? 0 : transportSource.getCurrentPosition() / transportSource.getLengthInSeconds());
 }
 
+/**
+ * Implementation of getLengthInSeconds method for DJAudioPlayer
+ *
+ * Returns the total length in seconds of the loaded audio source.
+ */
+double DJAudioPlayer::getLengthInSeconds() {
+	return transportSource.getLengthInSeconds();
+}
+
 //==============================================================================
 
 /**

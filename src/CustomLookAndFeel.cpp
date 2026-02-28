@@ -21,6 +21,21 @@ CustomLookAndFeel::CustomLookAndFeel() {
 
 //============================================================================== 
 
+/**
+ * Implementation of drawButtonText for CustomLookAndFeel
+ *
+ * Draws button text at 8px font size, centred within the button.
+ */
+void CustomLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button, bool, bool) {
+	g.setFont(8.0f);
+	g.setColour(button.findColour(juce::TextButton::textColourOnId)
+		.withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.5f));
+	g.drawFittedText(button.getButtonText(),
+		2, 0, button.getWidth() - 4, button.getHeight(),
+		juce::Justification::centred, 2);
+}
+
+//============================================================================== 
 
 /**
  * Implementation of a drawLinearSlider for CustomLookAndFeel

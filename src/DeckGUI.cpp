@@ -68,6 +68,8 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 	for (auto& cue : cues) {
 		addAndMakeVisible(cue);
 		cue->addListener(this);
+		cue->addMouseListener(this, false);
+		cue->setLookAndFeel(&customLookAndFeel);
 	}
 
 	const std::unique_ptr<juce::XmlElement> playButton_xml(juce::XmlDocument::parse(BinaryData::playButton_svg));
@@ -157,11 +159,21 @@ void DeckGUI::paint(juce::Graphics& g)
 
 	for (auto& cue : cues) {
 		juce::TextButton* thisButton = cue;
-		if (cueTargets.find(thisButton) != cueTargets.end() && flash) {
+		bool hasCue = cueTargets.find(thisButton) != cueTargets.end();
+		if (hasCue && flash) {
 			thisButton->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colour::fromHSL(cueTargets[thisButton].second, (float)1, (float)0.5, (float)1));
 		}
 		else {
 			thisButton->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		}
+
+		if (hasCue) {
+			double cueSeconds = cueTargets[thisButton].first * player->getLengthInSeconds();
+			std::string timeStr = track::getLengthString(cueSeconds);
+			thisButton->setButtonText(juce::String(timeStr) + "  x");
+		}
+		else {
+			thisButton->setButtonText("");
 		}
 	}
 
@@ -239,7 +251,21 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		for (auto& cue : cues) {
 			juce::TextButton* thisButton = cue;
 			if (button == thisButton) {
-				if (cueTargets.find(thisButton) != cueTargets.end()) {
+				auto clickPos = juce::Desktop::getInstance().getMainMouseSource().getLastMouseDownPosition();
+				auto btnScreenBounds = thisButton->getScreenBounds();
+				auto localClick = clickPos - btnScreenBounds.getPosition().toFloat();
+
+				// Check if "x" area was clicked (top-right 14x14)
+				bool xClicked = cueTargets.find(thisButton) != cueTargets.end() &&
+					localClick.getX() > thisButton->getWidth() - 14 &&
+					localClick.getY() < 14;
+
+				if (xClicked) {
+					cueTargets.erase(thisButton);
+					waveformDisplay.setCuePoints(cueTargets);
+					zoomedDisplay->setCuePoints(cueTargets);
+				}
+				else if (cueTargets.find(thisButton) != cueTargets.end()) {
 					player->setPositionRelative(cueTargets[thisButton].first);
 					if (!modeIsPlaying) {
 						modeIsPlaying = true;
@@ -260,6 +286,53 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 	else
 		player->stop();
 };
+
+//============================================================================== 
+
+/**
+ * Implementation of mouseDown method for DeckGUI
+ *
+ * Handles right-click context menu on cue buttons for set/jump/remove actions.
+ */
+void DeckGUI::mouseDown(const juce::MouseEvent& event) {
+	if (!event.mods.isPopupMenu() || !player->isLoaded())
+		return;
+
+	auto* source = event.eventComponent;
+	for (auto& cue : cues) {
+		if (source == cue) {
+			bool hasCue = cueTargets.find(cue) != cueTargets.end();
+
+			juce::PopupMenu menu;
+			menu.addItem(1, "Set Cue Here");
+			menu.addItem(2, "Jump to Cue", hasCue);
+			menu.addItem(3, "Remove Cue", hasCue);
+
+			menu.showMenuAsync(juce::PopupMenu::Options(),
+				[this, cue](int result) {
+					if (result == 1) {
+						cueTargets[cue] = std::make_pair(player->getPositionRelative(), static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+						waveformDisplay.setCuePoints(cueTargets);
+						zoomedDisplay->setCuePoints(cueTargets);
+					}
+					else if (result == 2) {
+						player->setPositionRelative(cueTargets[cue].first);
+						if (!modeIsPlaying) {
+							modeIsPlaying = true;
+							playButton.setToggleState(true, juce::NotificationType::dontSendNotification);
+							player->start();
+						}
+					}
+					else if (result == 3) {
+						cueTargets.erase(cue);
+						waveformDisplay.setCuePoints(cueTargets);
+						zoomedDisplay->setCuePoints(cueTargets);
+					}
+				});
+			break;
+		}
+	}
+}
 
 //============================================================================== 
 

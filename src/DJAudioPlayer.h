@@ -95,6 +95,11 @@ public:
    */
 	double getPositionRelative();
 
+	/**
+	   * Get the total length of the loaded track in seconds
+	 */
+	double getLengthInSeconds();
+
 	//==============================================================================
 
 	/**
