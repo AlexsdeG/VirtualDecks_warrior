@@ -167,19 +167,19 @@ void WaveformDisplay::paint(juce::Graphics& g)
 		// Draw loop region highlight
 		if (loopInRel >= 0.0) {
 			float loopX1 = static_cast<float>(loopInRel * getWidth());
-			// Always draw the IN marker as an orange line
-			g.setColour(juce::Colours::orange);
+			// Always draw the IN marker as an blue line
+			g.setColour(juce::Colours::blue);
 			g.drawLine(loopX1, 0.0f, loopX1, static_cast<float>(getHeight()), 2.0f);
 
 			if (loopOutRel > loopInRel) {
 				float loopX2 = static_cast<float>(loopOutRel * getWidth());
 				juce::Colour loopColour = loopIsActive
 					? juce::Colours::limegreen.withAlpha(0.25f)
-					: juce::Colours::orange.withAlpha(0.20f);
+					: juce::Colours::blue.withAlpha(0.20f);
 				g.setColour(loopColour);
 				g.fillRect(loopX1, 0.0f, loopX2 - loopX1, static_cast<float>(getHeight()));
 				// Draw boundary lines
-				juce::Colour lineColour = loopIsActive ? juce::Colours::limegreen : juce::Colours::orange;
+				juce::Colour lineColour = loopIsActive ? juce::Colours::limegreen : juce::Colours::blue;
 				g.setColour(lineColour);
 				g.drawLine(loopX1, 0.0f, loopX1, static_cast<float>(getHeight()), 2.0f);
 				g.drawLine(loopX2, 0.0f, loopX2, static_cast<float>(getHeight()), 2.0f);

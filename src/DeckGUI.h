@@ -254,8 +254,8 @@ private:
 	//==============================================================================
 	// Tab mode: Hot Cues vs Beat Grid
 
-	/// Enum for the cue/grid/jump/loop tab mode
-	enum class CueGridMode { HotCues, BeatGrid, BeatJump, Loop };
+	/// Enum for the cue/grid/jump/loop/quantize tab mode
+	enum class CueGridMode { HotCues, BeatGrid, BeatJump, Loop, Quantize };
 
 	/// Current tab mode
 	CueGridMode cueGridMode = CueGridMode::HotCues;
@@ -341,6 +341,60 @@ private:
 
 	/// Sets visibility of loop controls
 	void setLoopControlsVisible(bool visible);
+
+	//==============================================================================
+	// Quantize Controls
+
+	/// Struct describing a pending quantized action
+	struct PendingQuantizeAction {
+		enum class Type { None, PlayStart, PlayStop, LoopIn, LoopOut,
+		                  LoopHalve, LoopDouble, BeatJump, HotCueJump, HotCueSet };
+		Type              type           = Type::None;
+		double            fireAtRealTime = 0.0;
+		juce::Button*     srcButton      = nullptr;
+		int               beatJumpBeats  = 0;
+		double            hotCueRelPos   = -1.0;
+		double            hotCueSetPos   = -1.0;
+		float             hotCueHue      = 0.0f;
+		juce::TextButton* cueButtonTarget = nullptr;
+		bool isValid() const { return type != Type::None; }
+		void clear()         { *this = PendingQuantizeAction{}; }
+	};
+
+	/// Current pending quantized action
+	PendingQuantizeAction pendingAction;
+
+	/// Tab button for quantize controls
+	juce::TextButton quantizeTabButton{ "QNTZ" };
+
+	/// Label for quantize combo box
+	juce::Label quantizeLabel{ "Q_LABEL", "QUANTIZE:" };
+
+	/// ComboBox to select the quantize subdivision
+	juce::ComboBox quantizeComboBox;
+
+	/// Returns the quantize interval in seconds (0 = off)
+	double getQuantizeIntervalSecs() const;
+
+	/// Returns the next beat-grid-aligned quantize boundary in track seconds
+	double getNextQuantizeBoundarySecs(double currentSecs) const;
+
+	/// Queue an action for quantized execution, or execute immediately if quantize is off
+	void queueOrExecute(PendingQuantizeAction::Type type, juce::Button* btn,
+	                    int beats = 0, double hotCueRelPos = -1.0,
+	                    double hotCueSetPos = -1.0, float hotCueHue = 0.0f,
+	                    juce::TextButton* cueBtnTarget = nullptr);
+
+	/// Cancel and revert the current pending action
+	void clearPendingAction();
+
+	/// Fire the current pending action
+	void executePendingAction();
+
+	/// Sets visibility of quantize controls
+	void setQuantizeControlsVisible(bool visible);
+
+	//==============================================================================
 
 	/// Identity hash of the currently loaded track (legacy)
 	juce::String currentTrackIdentity;

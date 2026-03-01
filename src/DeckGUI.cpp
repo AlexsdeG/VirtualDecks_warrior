@@ -101,6 +101,33 @@ DeckGUI::DeckGUI(DJAudioPlayer* _player, juce::AudioFormatManager& formatManager
 	jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 	loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 
+	// Quantize tab button and controls
+	addAndMakeVisible(quantizeTabButton);
+	quantizeTabButton.addListener(this);
+	quantizeTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+
+	quantizeLabel.setEditable(false);
+	quantizeLabel.setJustificationType(juce::Justification::centredLeft);
+	quantizeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+	addChildComponent(quantizeLabel);
+
+	quantizeComboBox.addItem("None", 1);
+	quantizeComboBox.addItem("1 Bar", 2);
+	quantizeComboBox.addItem("1/2 Bar", 3);
+	quantizeComboBox.addItem("1/3 Bar", 4);
+	quantizeComboBox.addItem("1/4 Bar", 5);
+	quantizeComboBox.addItem("1/5 Bar", 6);
+	quantizeComboBox.addItem("1/6 Bar", 7);
+	quantizeComboBox.addItem("1/7 Bar", 8);
+	quantizeComboBox.addItem("1/8 Bar", 9);
+	quantizeComboBox.addItem("1/9 Bar", 10);
+	quantizeComboBox.addItem("1/32 Bar", 11);
+	quantizeComboBox.setSelectedId(1, juce::dontSendNotification);
+	quantizeComboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+	quantizeComboBox.setColour(juce::ComboBox::textColourId, juce::Colours::white);
+	quantizeComboBox.setColour(juce::ComboBox::outlineColourId, theme.withAlpha(0.5f));
+	addChildComponent(quantizeComboBox);
+
 	// Beat grid controls
 	gridBpmLabel.setEditable(false);
 	gridBpmLabel.setJustificationType(juce::Justification::centredLeft);
@@ -262,7 +289,12 @@ void DeckGUI::paint(juce::Graphics& g)
 	for (auto& cue : cues) {
 		juce::TextButton* thisButton = cue;
 		bool hasCue = cueTargets.find(thisButton) != cueTargets.end();
-		if (hasCue && flash) {
+
+		// Skip color update if this button has a pending quantize action (orange)
+		if (pendingAction.isValid() && pendingAction.srcButton == thisButton) {
+			// Keep orange — don't override
+		}
+		else if (hasCue && flash) {
 			thisButton->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colour::fromHSL(cueTargets[thisButton].second, (float)1, (float)0.5, (float)1));
 		}
 		else {
@@ -317,14 +349,15 @@ void DeckGUI::resized()
 	double cellLength = (getWidth() * 18.5 / 32 - 105) / 3;
 	double cellHeight = 44.45;
 
-	// Tab buttons above cue/grid/jump/loop area
+	// Tab buttons above cue/grid/jump/loop/quantize area
 	double tabAreaWidth = cellLength * 3;
-	double tabWidth = (tabAreaWidth - 6) / 4; // 4 tabs with 2px gaps
+	double tabWidth = (tabAreaWidth - 8) / 5; // 5 tabs with 2px gaps
 	double tabHeight = 20;
 	cueTabButton.setBounds(xOffset, yOffset - tabHeight - 2, tabWidth, tabHeight);
 	gridTabButton.setBounds(xOffset + (tabWidth + 2), yOffset - tabHeight - 2, tabWidth, tabHeight);
 	jumpTabButton.setBounds(xOffset + (tabWidth + 2) * 2, yOffset - tabHeight - 2, tabWidth, tabHeight);
 	loopTabButton.setBounds(xOffset + (tabWidth + 2) * 3, yOffset - tabHeight - 2, tabWidth, tabHeight);
+	quantizeTabButton.setBounds(xOffset + (tabWidth + 2) * 4, yOffset - tabHeight - 2, tabWidth, tabHeight);
 
 	// Cue buttons (same as before)
 	for (auto i = 0; i < 3; ++i) {
@@ -377,6 +410,11 @@ void DeckGUI::resized()
 	loopDoubleBtn.setBounds(xOffset + (loopBtnWidth + 4), loopRow2Y, loopBtnWidth, cellHeight - 4);
 	loopClearBtn.setBounds(xOffset + (loopBtnWidth + 4) * 2, loopRow2Y, loopBtnWidth, cellHeight - 4);
 
+	// Quantize controls layout (same area as cue buttons)
+	double qContentWidth = cellLength * 3 - 4;
+	quantizeLabel.setBounds(xOffset, yOffset + 4, qContentWidth, 20);
+	quantizeComboBox.setBounds(xOffset, yOffset + 26, qContentWidth, 28);
+
 	lowBandFilter.setBounds(xOffset, rowH * 5.8, 50, 50);
 	midBandFilter.setBounds(xOffset + getWidth() / 5, rowH * 5.8, 50, 50);
 	highBandFilter.setBounds(xOffset + getWidth() * 2 / 5, rowH * 5.8, 50, 50);
@@ -399,8 +437,46 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 
 	if (button == &playButton) {
 		DBG("MainComponent::buttonClicked: They clicked the play button");
+		double interval = getQuantizeIntervalSecs();
+		if (interval > 0.0 && player->isLoaded()) {
+			// Cancel if play button already pending
+			if (pendingAction.isValid() && pendingAction.srcButton == &playButton) {
+				clearPendingAction();
+				// Restore toggle state (button auto-toggled, undo it)
+				playButton.setToggleState(modeIsPlaying, juce::NotificationType::dontSendNotification);
+				return;
+			}
+			// Arm pending play/stop
+			bool intendToStart = !modeIsPlaying; // what user wants after toggle
+			auto ptype = intendToStart ? PendingQuantizeAction::Type::PlayStart
+			                           : PendingQuantizeAction::Type::PlayStop;
+
+			if (pendingAction.isValid())
+				clearPendingAction();
+
+			double currentSecs = player->getPositionRelative() * player->getLengthInSeconds();
+			double nextBoundary = getNextQuantizeBoundarySecs(currentSecs);
+			double sr = juce::jmax(0.0001, player->getSpeedRatio());
+			double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+			double fireAt = now + (nextBoundary - currentSecs) / sr;
+
+			pendingAction.type = ptype;
+			pendingAction.fireAtRealTime = fireAt;
+			pendingAction.srcButton = &playButton;
+			playButton.setColour(juce::DrawableButton::backgroundColourId,
+				juce::Colours::orange.withAlpha(0.7f));
+			// Undo the auto-toggle — keep current state until fire
+			playButton.setToggleState(modeIsPlaying, juce::NotificationType::dontSendNotification);
+			return;
+		}
+		// Non-quantized: immediate
 		modeIsPlaying = !modeIsPlaying;
 		playButton.setButtonStyle(juce::DrawableButton::ButtonStyle::ImageFitted);
+		if (modeIsPlaying)
+			player->start();
+		else
+			player->stop();
+		return;
 	}
 
 	if (button == &loadButton && library->selectionIsValid()) {
@@ -414,10 +490,12 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		quantizeTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(true);
 		setGridControlsVisible(false);
 		setBeatJumpControlsVisible(false);
 		setLoopControlsVisible(false);
+		setQuantizeControlsVisible(false);
 	}
 
 	if (button == &gridTabButton) {
@@ -426,10 +504,12 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		quantizeTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(false);
 		setGridControlsVisible(true);
 		setBeatJumpControlsVisible(false);
 		setLoopControlsVisible(false);
+		setQuantizeControlsVisible(false);
 		updateGridBpmDisplay();
 	}
 
@@ -439,10 +519,12 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		quantizeTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(false);
 		setGridControlsVisible(false);
 		setBeatJumpControlsVisible(true);
 		setLoopControlsVisible(false);
+		setQuantizeControlsVisible(false);
 	}
 
 	if (button == &loopTabButton) {
@@ -451,29 +533,45 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		quantizeTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
 		setCueButtonsVisible(false);
 		setGridControlsVisible(false);
 		setBeatJumpControlsVisible(false);
 		setLoopControlsVisible(true);
+		setQuantizeControlsVisible(false);
 	}
 
-	// Beat jump buttons
-	if (button == &jumpBackward16Btn) player->beatJump(-16);
-	if (button == &jumpBackward8Btn) player->beatJump(-8);
-	if (button == &jumpBackward4Btn) player->beatJump(-4);
-	if (button == &jumpBackward1Btn) player->beatJump(-1);
-	if (button == &jumpForward1Btn) player->beatJump(1);
-	if (button == &jumpForward4Btn) player->beatJump(4);
-	if (button == &jumpForward8Btn) player->beatJump(8);
-	if (button == &jumpForward16Btn) player->beatJump(16);
+	if (button == &quantizeTabButton) {
+		cueGridMode = CueGridMode::Quantize;
+		quantizeTabButton.setColour(juce::TextButton::buttonColourId, theme.withAlpha(0.8f));
+		cueTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		gridTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		jumpTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		loopTabButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGBA(25, 25, 25, 255));
+		setCueButtonsVisible(false);
+		setGridControlsVisible(false);
+		setBeatJumpControlsVisible(false);
+		setLoopControlsVisible(false);
+		setQuantizeControlsVisible(true);
+	}
 
-	// Loop buttons
-	if (button == &loopInBtn) player->setLoopIn();
-	if (button == &loopOutBtn) player->setLoopOut();
-	if (button == &reloopBtn) player->toggleReloop();
-	if (button == &loopHalveBtn) player->halveLoop();
-	if (button == &loopDoubleBtn) player->doubleLoop();
-	if (button == &loopClearBtn) player->clearLoop();
+	// Beat jump buttons (quantized)
+	if (button == &jumpBackward16Btn) queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpBackward16Btn, -16);
+	if (button == &jumpBackward8Btn)  queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpBackward8Btn, -8);
+	if (button == &jumpBackward4Btn)  queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpBackward4Btn, -4);
+	if (button == &jumpBackward1Btn)  queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpBackward1Btn, -1);
+	if (button == &jumpForward1Btn)   queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpForward1Btn, 1);
+	if (button == &jumpForward4Btn)   queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpForward4Btn, 4);
+	if (button == &jumpForward8Btn)   queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpForward8Btn, 8);
+	if (button == &jumpForward16Btn)  queueOrExecute(PendingQuantizeAction::Type::BeatJump, &jumpForward16Btn, 16);
+
+	// Loop buttons (quantized except reloop and clear)
+	if (button == &loopInBtn)     queueOrExecute(PendingQuantizeAction::Type::LoopIn, &loopInBtn);
+	if (button == &loopOutBtn)    queueOrExecute(PendingQuantizeAction::Type::LoopOut, &loopOutBtn);
+	if (button == &reloopBtn)     player->toggleReloop();
+	if (button == &loopHalveBtn)  queueOrExecute(PendingQuantizeAction::Type::LoopHalve, &loopHalveBtn);
+	if (button == &loopDoubleBtn) queueOrExecute(PendingQuantizeAction::Type::LoopDouble, &loopDoubleBtn);
+	if (button == &loopClearBtn)  player->clearLoop();
 
 	// Grid control buttons
 	if (button == &gridNudgeLeftBtn) {
@@ -526,6 +624,7 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 		saveTrackData(grid);
 	}
 
+	// Hot cue buttons (quantized for set and jump)
 	if (player->isLoaded()) {
 		for (auto& cue : cues) {
 			juce::TextButton* thisButton = cue;
@@ -540,30 +639,25 @@ void DeckGUI::buttonClicked(juce::Button* button) {
 					localClick.getY() < 14;
 
 				if (xClicked) {
+					// Remove is always immediate
 					cueTargets.erase(thisButton);
 					waveformDisplay.setCuePoints(cueTargets);
 					zoomedDisplay->setCuePoints(cueTargets);
 				}
 				else if (cueTargets.find(thisButton) != cueTargets.end()) {
-					player->setPositionRelative(cueTargets[thisButton].first);
-					if (!modeIsPlaying) {
-						modeIsPlaying = true;
-						playButton.setToggleState(true, juce::NotificationType::dontSendNotification);
-					}
+					// Jump to cue (quantized)
+					queueOrExecute(PendingQuantizeAction::Type::HotCueJump, thisButton,
+						0, cueTargets[thisButton].first, -1.0, 0.0f, thisButton);
 				}
 				else {
-					cueTargets[thisButton] = std::make_pair(player->getPositionRelative(), static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
-					waveformDisplay.setCuePoints(cueTargets);
-					zoomedDisplay->setCuePoints(cueTargets);
+					// Set cue (quantized) — capture position now
+					float hue = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+					queueOrExecute(PendingQuantizeAction::Type::HotCueSet, thisButton,
+						0, -1.0, player->getPositionRelative(), hue, thisButton);
 				}
 			}
 		}
 	}
-
-	if (modeIsPlaying)
-		player->start();
-	else
-		player->stop();
 };
 
 //============================================================================== 
@@ -606,17 +700,13 @@ void DeckGUI::mouseDown(const juce::MouseEvent& event) {
 			menu.showMenuAsync(juce::PopupMenu::Options(),
 				[this, cue](int result) {
 					if (result == 1) {
-						cueTargets[cue] = std::make_pair(player->getPositionRelative(), static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
-						waveformDisplay.setCuePoints(cueTargets);
-						zoomedDisplay->setCuePoints(cueTargets);
+						float hue = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+						queueOrExecute(PendingQuantizeAction::Type::HotCueSet, cue,
+							0, -1.0, player->getPositionRelative(), hue, cue);
 					}
 					else if (result == 2) {
-						player->setPositionRelative(cueTargets[cue].first);
-						if (!modeIsPlaying) {
-							modeIsPlaying = true;
-							playButton.setToggleState(true, juce::NotificationType::dontSendNotification);
-							player->start();
-						}
+						queueOrExecute(PendingQuantizeAction::Type::HotCueJump, cue,
+							0, cueTargets[cue].first, -1.0, 0.0f, cue);
 					}
 					else if (result == 3) {
 						cueTargets.erase(cue);
@@ -791,10 +881,18 @@ void DeckGUI::timerCallback() {
 	// Update loop button highlights
 	bool inSet = player->getLoopInRelative() >= 0.0;
 	bool loopOn = player->isLooping();
-	loopInBtn.setColour(juce::TextButton::buttonColourId,
-		inSet ? juce::Colours::orange.withAlpha(0.7f) : juce::Colour::fromRGBA(25, 25, 25, 255));
+	if (!pendingAction.isValid() || pendingAction.srcButton != &loopInBtn)
+		loopInBtn.setColour(juce::TextButton::buttonColourId,
+			inSet ? juce::Colours::blue.withAlpha(0.7f) : juce::Colour::fromRGBA(25, 25, 25, 255));
 	reloopBtn.setColour(juce::TextButton::buttonColourId,
 		loopOn ? juce::Colours::limegreen.withAlpha(0.6f) : juce::Colour::fromRGBA(25, 25, 25, 255));
+
+	// Fire pending quantize action if its time has arrived
+	if (pendingAction.isValid()) {
+		double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+		if (now >= pendingAction.fireAtRealTime)
+			executePendingAction();
+	}
 }
 
 //============================================================================== 
@@ -808,6 +906,7 @@ void DeckGUI::timerCallback() {
  *
  */
 void DeckGUI::loadDeck(track track) {
+	clearPendingAction();
 	player->loadURL(track.url);
 	if (player->isLoaded()) {
 		for (auto& display : displays) {
@@ -933,6 +1032,220 @@ void DeckGUI::setLoopControlsVisible(bool visible) {
 	loopHalveBtn.setVisible(visible);
 	loopDoubleBtn.setVisible(visible);
 	loopClearBtn.setVisible(visible);
+}
+
+//==============================================================================
+
+/**
+ * Implementation of setQuantizeControlsVisible method for DeckGUI
+ *
+ * Shows or hides the quantize label and combo box.
+ */
+void DeckGUI::setQuantizeControlsVisible(bool visible) {
+	quantizeLabel.setVisible(visible);
+	quantizeComboBox.setVisible(visible);
+}
+
+//==============================================================================
+
+/**
+ * Implementation of getQuantizeIntervalSecs method for DeckGUI
+ *
+ * Maps the quantize ComboBox selection to a duration in seconds
+ * based on the current beat grid BPM. Returns 0.0 when quantize
+ * is disabled or no BPM is available.
+ */
+double DeckGUI::getQuantizeIntervalSecs() const {
+	double bpm = player->getBeatGrid().bpm;
+	if (bpm <= 0.0)
+		return 0.0;
+
+	double beatSecs = 60.0 / bpm;
+	int id = quantizeComboBox.getSelectedId();
+
+	switch (id) {
+		case 2:  return 4.0 * beatSecs;             // 1 Bar
+		case 3:  return 2.0 * beatSecs;             // 1/2 Bar
+		case 4:  return (4.0 / 3.0) * beatSecs;    // 1/3 Bar
+		case 5:  return beatSecs;                    // 1/4 Bar (1 beat)
+		case 6:  return (4.0 / 5.0) * beatSecs;    // 1/5 Bar
+		case 7:  return (4.0 / 6.0) * beatSecs;    // 1/6 Bar
+		case 8:  return (4.0 / 7.0) * beatSecs;    // 1/7 Bar
+		case 9:  return 0.5 * beatSecs;             // 1/8 Bar
+		case 10: return (4.0 / 9.0) * beatSecs;    // 1/9 Bar
+		case 11: return (4.0 / 32.0) * beatSecs;   // 1/32 Bar
+		default: return 0.0;                         // None (id 1) or unknown
+	}
+}
+
+//==============================================================================
+
+/**
+ * Implementation of getNextQuantizeBoundarySecs method for DeckGUI
+ *
+ * Given the current playback position in seconds, returns the next
+ * beat-grid-aligned quantize boundary in track time. If quantize is
+ * off, returns the current position unchanged.
+ */
+double DeckGUI::getNextQuantizeBoundarySecs(double currentSecs) const {
+	double interval = getQuantizeIntervalSecs();
+	if (interval <= 0.0)
+		return currentSecs;
+
+	double offset = player->getBeatGrid().gridOffsetSecs;
+	double intervals = (currentSecs - offset) / interval;
+	double nextIdx = std::floor(intervals + 1e-9) + 1.0;
+	return offset + nextIdx * interval;
+}
+
+//==============================================================================
+
+/**
+ * Implementation of clearPendingAction method for DeckGUI
+ *
+ * Reverts the visual state of the pending button and clears the action.
+ */
+void DeckGUI::clearPendingAction() {
+	if (pendingAction.srcButton != nullptr) {
+		if (pendingAction.srcButton == &playButton) {
+			playButton.setColour(juce::DrawableButton::backgroundColourId,
+				juce::Colours::transparentBlack);
+		}
+		else {
+			pendingAction.srcButton->setColour(juce::TextButton::buttonColourId,
+				juce::Colour::fromRGBA(25, 25, 25, 255));
+		}
+	}
+	pendingAction.clear();
+}
+
+//==============================================================================
+
+/**
+ * Implementation of executePendingAction method for DeckGUI
+ *
+ * Dispatches the stored pending action to the appropriate player method,
+ * then clears the pending state and reverts the button colour.
+ */
+void DeckGUI::executePendingAction() {
+	auto action = pendingAction;
+	clearPendingAction();
+
+	switch (action.type) {
+		case PendingQuantizeAction::Type::PlayStart:
+			modeIsPlaying = true;
+			playButton.setToggleState(true, juce::NotificationType::dontSendNotification);
+			player->start();
+			break;
+		case PendingQuantizeAction::Type::PlayStop:
+			modeIsPlaying = false;
+			playButton.setToggleState(false, juce::NotificationType::dontSendNotification);
+			player->stop();
+			break;
+		case PendingQuantizeAction::Type::LoopIn:
+			player->setLoopIn();
+			break;
+		case PendingQuantizeAction::Type::LoopOut:
+			player->setLoopOut();
+			break;
+		case PendingQuantizeAction::Type::LoopHalve:
+			player->halveLoop();
+			break;
+		case PendingQuantizeAction::Type::LoopDouble:
+			player->doubleLoop();
+			break;
+		case PendingQuantizeAction::Type::BeatJump:
+			player->beatJump(action.beatJumpBeats);
+			break;
+		case PendingQuantizeAction::Type::HotCueJump:
+			player->setPositionRelative(action.hotCueRelPos);
+			if (!modeIsPlaying) {
+				modeIsPlaying = true;
+				playButton.setToggleState(true, juce::NotificationType::dontSendNotification);
+				player->start();
+			}
+			break;
+		case PendingQuantizeAction::Type::HotCueSet:
+			if (action.cueButtonTarget != nullptr) {
+				double setPos = player->getPositionRelative();
+				cueTargets[action.cueButtonTarget] = std::make_pair(setPos, action.hotCueHue);
+				waveformDisplay.setCuePoints(cueTargets);
+				zoomedDisplay->setCuePoints(cueTargets);
+			}
+			break;
+		default:
+			break;
+	}
+}
+
+//==============================================================================
+
+/**
+ * Implementation of queueOrExecute method for DeckGUI
+ *
+ * If quantize is active and the player is playing, calculates the next
+ * quantize boundary and arms the action with an orange button highlight.
+ * If the same button is already pending, cancels the pending action.
+ * Otherwise executes the action immediately.
+ */
+void DeckGUI::queueOrExecute(PendingQuantizeAction::Type type, juce::Button* btn,
+                              int beats, double hotCueRelPos,
+                              double hotCueSetPos, float hotCueHue,
+                              juce::TextButton* cueBtnTarget) {
+	double interval = getQuantizeIntervalSecs();
+
+	// Cancel if same button already pending
+	if (pendingAction.isValid() && pendingAction.srcButton == btn) {
+		clearPendingAction();
+		return;
+	}
+
+	// Execute immediately if quantize is off or player isn't playing
+	if (interval <= 0.0 || !player->isPlaying()) {
+		// Clear any existing pending action first
+		if (pendingAction.isValid())
+			clearPendingAction();
+
+		PendingQuantizeAction immediate;
+		immediate.type = type;
+		immediate.beatJumpBeats = beats;
+		immediate.hotCueRelPos = hotCueRelPos;
+		immediate.hotCueSetPos = hotCueSetPos;
+		immediate.hotCueHue = hotCueHue;
+		immediate.cueButtonTarget = cueBtnTarget;
+		pendingAction = immediate;
+		executePendingAction();
+		return;
+	}
+
+	// Queue: calculate fire time
+	if (pendingAction.isValid())
+		clearPendingAction();
+
+	double currentSecs = player->getPositionRelative() * player->getLengthInSeconds();
+	double nextBoundary = getNextQuantizeBoundarySecs(currentSecs);
+	double sr = juce::jmax(0.0001, player->getSpeedRatio());
+	double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+	double fireAt = now + (nextBoundary - currentSecs) / sr;
+
+	pendingAction.type = type;
+	pendingAction.fireAtRealTime = fireAt;
+	pendingAction.srcButton = btn;
+	pendingAction.beatJumpBeats = beats;
+	pendingAction.hotCueRelPos = hotCueRelPos;
+	pendingAction.hotCueSetPos = hotCueSetPos;
+	pendingAction.hotCueHue = hotCueHue;
+	pendingAction.cueButtonTarget = cueBtnTarget;
+
+	// Highlight button orange
+	if (btn == &playButton) {
+		playButton.setColour(juce::DrawableButton::backgroundColourId,
+			juce::Colours::orange.withAlpha(0.7f));
+	}
+	else {
+		btn->setColour(juce::TextButton::buttonColourId,
+			juce::Colours::orange.withAlpha(0.8f));
+	}
 }
 
 //==============================================================================

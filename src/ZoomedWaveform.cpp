@@ -96,10 +96,10 @@ void ZoomedWaveform::paint(juce::Graphics& g)
 		// Draw loop region highlight in zoomed view
 		if (loopInRel >= 0.0) {
 			double loopInSecs = loopInRel * audioThumb.getTotalLength();
-			// Always draw the IN marker as an orange line if visible
+			// Always draw the IN marker as an blue line if visible
 			if (loopInSecs >= left && loopInSecs <= right) {
 				float lx = static_cast<float>(juce::jmap(loopInSecs, left, right, 0.0, (double)getWidth()));
-				g.setColour(juce::Colours::orange);
+				g.setColour(juce::Colours::blue);
 				g.drawLine(lx, 0.0f, lx, static_cast<float>(getHeight()), 2.0f);
 			}
 
@@ -113,11 +113,11 @@ void ZoomedWaveform::paint(juce::Graphics& g)
 					float x2 = static_cast<float>(juce::jmap(drawRight, left, right, 0.0, (double)getWidth()));
 					juce::Colour loopColour = loopIsActive
 						? juce::Colours::limegreen.withAlpha(0.25f)
-						: juce::Colours::orange.withAlpha(0.20f);
+						: juce::Colours::blue.withAlpha(0.20f);
 					g.setColour(loopColour);
 					g.fillRect(x1, 0.0f, x2 - x1, static_cast<float>(getHeight()));
 					// Draw boundary lines if visible
-					juce::Colour lineColour = loopIsActive ? juce::Colours::limegreen : juce::Colours::orange;
+					juce::Colour lineColour = loopIsActive ? juce::Colours::limegreen : juce::Colours::blue;
 					g.setColour(lineColour);
 					if (loopInSecs >= left && loopInSecs <= right) {
 						float lx = static_cast<float>(juce::jmap(loopInSecs, left, right, 0.0, (double)getWidth()));
